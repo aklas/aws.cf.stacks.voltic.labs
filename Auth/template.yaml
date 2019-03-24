@@ -25,14 +25,6 @@ Globals:
     Timeout: 20
 
 Resources:
-  # NodeJSFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri: legacy_src/nodejs8.10/
-  #     Handler: filename.lambdaHandler
-  #     MemorySize: 128
-  #     Runtime: nodejs8.10
-
   UserPool:                                               # See 6A
     Type: AWS::Cognito::UserPool
     Properties:
