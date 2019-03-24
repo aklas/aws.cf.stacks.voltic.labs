@@ -1,0 +1,381 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Liveworks
+
+Parameters:
+  AuthName:
+    Type: String
+    Default: VolticAuth
+    Description: Unique Auth Name for the AWS Cognito Resources (User Pool, Identity Pool, IAM roles, etc...)
+  ReleaseEnvironment: 
+    Type: String
+    Default: dev
+    Description: The software development environment (ie dev, testing, production, etc...)
+  
+##################################################################################
+#####     Fixes I need to do   #####
+####################################
+# 1. Set this stack up as a nested stack
+# 2. Find way to automatically create RoleMappings string
+
+
+Globals:
+  Function:
+    Timeout: 20
+
+Resources:
+  # NodeJSFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: legacy_src/nodejs8.10/
+  #     Handler: filename.lambdaHandler
+  #     MemorySize: 128
+  #     Runtime: nodejs8.10
+
+  UserPool:                                               # See 6A
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${AuthName}-User-Pool
+      UsernameAttributes:                                 # See 4A
+        - email
+      Schema:
+        - AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: True
+          Name: family_name
+          # NumberAttributeConstraints:
+          #   NumberAttributeConstraints
+          # StringAttributeConstraints:
+          #   StringAttributeConstraints
+          Required: False
+        - AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: False
+          Name: custom_attribute
+          # NumberAttributeConstraints:
+          #   NumberAttributeConstraints
+          # StringAttributeConstraints:
+          #   StringAttributeConstraints
+          Required: False
+      Policies: 
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: False
+          RequireNumbers: False
+          RequireSymbols: False
+          RequireUppercase: False
+      AdminCreateUserConfig: 
+        AllowAdminCreateUserOnly: False
+        UnusedAccountValidityDays: 1
+        InviteMessageTemplate: 
+          EmailSubject: EmailSubject {username} {####}
+          EmailMessage: EmailMessage {username} {####}
+          SMSMessage: SMSMessage {username} {####}
+      AutoVerifiedAttributes:                             # See 3A
+        - email
+      DeviceConfiguration:
+        DeviceOnlyRememberedOnUserPrompt: True            # See 1A
+        # ChallengeRequiredOnNewDevice: False             # comeback
+      EmailConfiguration:
+        ReplyToEmailAddress: info@volticlabs.com          # See 2A, see 2B if SourceArn is also set
+      EmailVerificationMessage: Your EmailVerificationMessage code {####}
+      EmailVerificationSubject: Email Subject EmailVerificationSubject
+      MfaConfiguration: OPTIONAL                          # See 7A
+      SmsConfiguration:                                   # comeback
+        ExternalId: SmsConfiguration-externalID           # See 5B
+        SnsCallerArn: !GetAtt SNSRole.Arn                 # See 5A
+      SmsAuthenticationMessage: Your SmsAuthenticationMessage code {####}
+      SmsVerificationMessage: Your SmsAuthenticationMessage code {####}
+      UserPoolTags:                                       # See 9A
+        CognitoUserPool: !Sub ${AuthName}-User-Pool
+      # LambdaConfig:                                       # See 8A
+      #   PreSignUp: !GetAtt PreSignupLambda.Arn
+      #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
+      #   PreAuthentication: String
+      #   PostAuthentication: String
+      #   CreateAuthChallenge: String
+      #   CustomMessage: String
+      #   DefineAuthChallenge: String
+      #   VerifyAuthChallengeResponse: String
+
+  IdentityPool:                                       # Comeback - make sure all required feilds are present
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub ${AuthName}IdentityPool
+      AllowUnauthenticatedIdentities: False
+      CognitoIdentityProviders: 
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+          ServerSideTokenCheck: True
+
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles: 
+        authenticated: !GetAtt AuthenticatedDefaultRole.Arn
+        unauthenticated: !GetAtt AuthenticatedDefaultRole.Arn
+      RoleMappings: 
+        cognito-idp.us-east-1.amazonaws.com/us-east-1_10OmmXB3C:7fjghquenen9lhnvv95n0hquse:
+          AmbiguousRoleResolution: Deny
+          Type: Token
+          # RulesConfiguration: 
+          #   Rules: 
+          #     - Claim: custom:custom_attribute
+          #       MatchType: Equals
+          #       RoleARN: !GetAtt SNSRole.Arn
+          #       Value: aValue
+
+  UserPoolGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      Description: Description of User Pool Group
+      GroupName: GroupName
+      Precedence: 2
+      RoleArn: !GetAtt GroupRole.Arn                              # comeback and add role
+      UserPoolId: !Ref UserPool
+
+  GroupRole:                                                      # comeback
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GroupRole
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Deny"
+            Principal: 
+              Federated: "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"          
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+        ClientName: !Sub ${AuthName}-client
+        GenerateSecret: True
+        # ExplicitAuthFlows: 
+        #   - String
+        # ReadAttributes: 
+        #   - String
+        # WriteAttributes: 
+        #   - String
+        RefreshTokenValidity: 30
+        UserPoolId: !Ref UserPool
+
+  # PreSignupLambda:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: !Sub ${AuthName}-PreSignup
+  #     CodeUri: Lambdas/nodejs8.10/cognito/
+  #     Handler: PreSignup.lambdaHandler
+  #     Runtime: nodejs8.10
+
+  # PostConfirmationLambda:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: !Sub ${AuthName}-PostConfirmation
+  #     CodeUri: Lambdas/nodejs8.10/cognito/
+  #     Handler: PostConfirmation.lambdaHandler
+  #     Runtime: nodejs8.10
+  
+  # PreSignupLambdaExecutionPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties: 
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt PreSignupLambda.Arn
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt UserPool.Arn
+
+  # PostConfirmationLambdaExecutionPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties: 
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt PostConfirmationLambda.Arn
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt UserPool.Arn
+
+  SNSRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "cognito-idp.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: "CognitoSNSPolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action: "sns:publish"
+                Resource: "*"
+
+  AuthenticatedDefaultRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AuthenticatedDefaultRole
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: 
+              Federated: "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals: 
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: "CognitoAuthorizedPolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action:
+                  - "mobileanalytics:PutEvents"
+                  - "cognito-sync:*"
+                  - "cognito-identity:*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"
+
+  Aklas:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      DesiredDeliveryMediums: 
+        - SMS
+        - EMAIL
+      UserAttributes: 
+        - Name: phone_number
+          Value: "+15879179300"
+        - Name: given_name
+          Value: Safi
+      Username: aklascheema@gmail.com
+      UserPoolId: !Ref UserPool
+      # ForceAliasCreation: Boolean
+      # MessageAction: String
+      # ValidationData: 
+      #   - AttributeType
+
+  AklasToGroupAttachment:
+    Type: AWS::Cognito::UserPoolUserToGroupAttachment
+    Properties:
+      GroupName: !Ref UserPoolGroup
+      Username: !Ref Aklas
+      UserPoolId: !Ref UserPool
+
+  # PreSignupLambda:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: Lambdas/java8
+  #     Handler: cognito.PreSignup::handleRequest
+  #     Runtime: java8
+  #     Timeout: 20
+  # PostConfirmationLambda:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: Lambdas/java8
+  #     Handler: cognito.PostConfirmations::handleRequest
+  #     Runtime: java8
+  #     Timeout: 20
+  # SampleLambdaFunction:
+  #   Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  #   Properties:
+  #     CodeUri: Lambdas/java8/CognitoSync
+  #     #Handler: helloworld.App::handleRequest
+  #     Handler: packagename.App::handleRequest
+  #     Runtime: java8
+  #     Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+  #       Variables:
+  #         PARAM1: VALUE
+
+
+# Outputs:
+#   SampleLambdaFunction:
+#     Description: "Hello World Lambda Function ARN"
+#     Value: !GetAtt SampleLambdaFunction.Arn
+#   SampleLambdaFunction:
+#     Description: "Implicit IAM Role created for Hello World function"
+#     Value: !GetAtt SampleLambdaFunction.Arn
+
+##################################################################################
+#####     CURRENT STATUS    #####
+#################################
+#                  Resource                       |  Instantiation | Partial | Complete
+# ------------------------------------------------|----------------|---------|---------
+#   AWS::Cognito::UserPool                        |        X       |         |         
+#   AWS::Cognito::IdentityPool                    |        X       |         |         
+#   AWS::Cognito::UserPoolClient                  |        X       |         |         
+#   AWS::Cognito::UserPoolGroup                   |        X       |         |         
+#   AWS::Cognito::IdentityPoolRoleAttachment      |        X       |         |                
+#   AWS::Cognito::UserPoolUser                    |        X       |         |         
+#   AWS::Cognito::UserPoolUserToGroupAttachment   |                |         |  
+# ------------------------------------------------|----------------|---------|---------
+# Instantiation:  The YAML outline of resource copied but commented out
+# Partial:        The resource is instantiated when creating stack but some field still missing
+# Complete:       The resource is instantiated and all fields required for project are set
+
+##################################################################################
+#####     NOTES    #####
+########################
+# 1    (DeviceConfiguration)
+# 1A ) When I changed the DeviceConfiguration setting (ChallengeRequiredOnNewDevice and DeviceOnlyRememberedOnUserPrompt) it changed if the device the user logged in was remebered or not.
+# Below is a table which shows the result of changing all possible configurations. It seems that when DeviceOnlyRememberedOnUserPrompt is set to False (F) the device is always remebered.
+# Or another way (and probablly more right) is that when DeviceOnlyRememberedOnUserPrompt is set to True (T) the uses chooses to opt in. I commented out ChallengeRequiredOnNewDevice and attempted this again.
+# I noticied that ChallengeRequiredOnNewDevice has no effect.
+# Thus DeviceOnlyRememberedOnUserPrompt when true sets it to User Opt in else is set to Always.
+# For more information refer to: 
+# https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-device-tracking.html
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-cognito-userpool-deviceconfiguration.html
+# ChallengeRequiredOnNewDevice  |   DeviceOnlyRememberedOnUserPrompt  |   General settings > Devices > Do you want to remember the your user's devices?
+# ------------------------------|-------------------------------------|----------------------------------------------------------------------------------
+#             T                 |                T                    |                       User Opt in
+#             T                 |                F                    |                          Always
+#             F                 |                T                    |                       User Opt in
+#             F                 |                F                    |                          Always
+##################################################################################
+# 2    (EmailConfiguration)
+# 2A ) Allows you define the reply to email address for emails that users get. This can be viewed by going to Message customizations > Do you want to customize your email address? > REPLY-TO email address.
+# 2B ) This setting configure what email address to send the email from by setting the SourceArn. This is only possible if the email addres exists (and thus has an associated Arn). 
+##################################################################################
+# 3    (AutoVerifiedAttributes)
+# 3A ) The name (AutoVerifiedAttributes) does not clearly describe what this property does. By setting AutoVerifiedAttributes you are forcing the user to verify that specific attribute.
+# This corresponds to MFA and Verification > Which attributes do you want to verify? in the AWS Cognito console.
+##################################################################################
+# 4    (UsernameAttributes)
+# 4A ) Allows you choose if email address and/or phone number to be used as username to sign up and sign in. This corresponds to General setting > Attributes > How do you want your end users to sign in? > Email address or phone number
+##################################################################################
+# 5    (SNSRole)
+# 5A ) The IAM role that allows AWS Cognito to have permission to send SMS messages. This corresponds to General settings > MFA and verifications > You must provide a role to allow Amazon Cognito to send SMS messages
+# 5B ) I am not too sure about this. Has to do something with IAM, will comeback to this. Can learn more about it at:
+# https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html
+# https://stackoverflow.com/questions/32467596/aws-confused-deputy-is-external-id-really-just-a-password
+##################################################################################
+# 6    (UserPool)
+# 6A ) The following is good example:
+# https://gist.github.com/singledigit/2c4d7232fa96d9e98a3de89cf6ebe7a5
+# For more information refer to the following:
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cognito-userpool.html
+##################################################################################
+# 7    (MfaConfiguration)
+# 7A ) If commented out it defaults to being OFF. This corresponds to General settings > MFA and verifications > Do you want to enable Multi-Factor Authentication (MFA)?
+##################################################################################
+# 8    (LambdaConfig)
+# 8A ) The lambda triggers that run in response to event emmited by AWS Cognito User Pool. To specify which lambda function should run on a specific trigger (PreAuthentication, PostAuthentication, etc...) use the ARN of the lambda function.
+# For more information on each of the triggers vist the following webistes:
+# https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-identity-pools-working-with-aws-lambda-triggers.html
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-cognito-userpool-lambdaconfig.html#cfn-cognito-userpool-lambdaconfig-createauthchallenge
+##################################################################################
+# 9    (UserPoolTags)
+# 9A ) The tags to bind to an AWS Cognito User Pool. The formart is a String to String map. So the tag key is specified as the YAML key and the tag value is specified by the YAML key.
+
