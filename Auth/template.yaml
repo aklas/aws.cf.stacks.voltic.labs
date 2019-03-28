@@ -53,15 +53,15 @@ Resources:
         authenticated: !GetAtt AuthenticatedDefaultRole.Arn
         unauthenticated: !GetAtt UnauthenticatedDefaultRole.Arn
       RoleMappings:                                       # See 10A
-        cognito-idp.us-east-1.amazonaws.com/us-east-1_5FTO2BY87:7apdeqh6dgv6tpt17a9i3b8pfq:
+        cognito-idp.us-east-1.amazonaws.com/us-east-1_LbvqwR1zG:72gd3hhmq7p4hfuitu3j20msqk:
           AmbiguousRoleResolution: Deny
-          Type: Token
-          # RulesConfiguration:                           # See 10B (As to why this is commented out)
-          #   Rules: 
-          #     - Claim: custom:custom_attribute
-          #       MatchType: Equals
-          #       RoleARN: !GetAtt SNSRole.Arn
-          #       Value: aValue
+          Type: Rules                                     # See 10B
+          RulesConfiguration:
+            Rules: 
+              - Claim: custom:user_type
+                MatchType: Equals
+                RoleARN: !GetAtt GroupRole.Arn
+                Value: worker
 
   # AklasToGroupAttachment:
   #   Type: AWS::Cognito::UserPoolUserToGroupAttachment
@@ -147,6 +147,11 @@ Resources:
             MaxLength: !Ref UserPoolAboutMeMaxLength
             MinLength: !Ref UserPoolAboutMeMinLength
           Required: False
+        - Name: user_type
+          AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: False
+          Required: False
       # LambdaConfig:                                       # See 8A
       #   PreSignUp: !GetAtt PreSignupLambda.Arn
       #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
@@ -202,6 +207,7 @@ Resources:
           - picture
           - custom:about_me
           - custom:signup_date_time
+          - custom:user_type
         # WriteAttributes:                                # See 13A
         #   - String
         RefreshTokenValidity: 30
@@ -226,6 +232,8 @@ Resources:
           Value: 2019-03-28                               # See 16A
         - Name: custom:about_me
           Value: Something About Me
+        - Name: custom:user_type
+          Value: WORKER
       Username: aklascheema@gmail.com
       UserPoolId: !Ref UserPool
       ForceAliasCreation: True                            # See 16C
@@ -387,7 +395,7 @@ Resources:
 #   AWS::Cognito::IdentityPool                    |                |         |    X    
 #   AWS::Cognito::UserPoolClient                  |                |         |    X    
 #   AWS::Cognito::UserPoolGroup                   |                |         |    X    
-#   AWS::Cognito::IdentityPoolRoleAttachment      |        X       |         |                NOTE: The RoleMappings idenitity provider needs to be manually copied
+#   AWS::Cognito::IdentityPoolRoleAttachment      |                |         |    X           NOTE: The RoleMappings idenitity provider needs to be manually copied
 #   AWS::Cognito::UserPoolUser                    |                |         |    X
 #   AWS::Cognito::UserPoolUserToGroupAttachment   |                |         |    X           NOTE: The Username property needs to be manually copied
 # ------------------------------------------------|----------------|---------|---------
@@ -461,7 +469,11 @@ Resources:
 # cognito-idp.us-east-1.amazonaws.com/us-east-1_iOanCxGRU:39bme3j847mj0pcv4uc3pktr9
 # So the format should follow the following:
 # cognito-idp.<region>.amazonaws.com/<UserPoolID>:<AppClientID>
-# 10B ) 
+# 10B ) You can use the User Pool group (the preferred roles claims),Token, or use can use the attributes (claims from token) to a role, Rules.
+# For more info visit the following:
+# http://www.youtube.com/watch?v=VZqG7HjT2AQ&t=10m48s
+# https://aws.amazon.com/blogs/aws/new-amazon-cognito-groups-and-fine-grained-role-based-access-control-2/
+# https://docs.aws.amazon.com/cognito/latest/developerguide/role-based-access-control.html
 ##################################################################################
 # 11    (Schema)
 # 11A ) See the following link to see a list of Standard Cognito User Pool Attributes:
