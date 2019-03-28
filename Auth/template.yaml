@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Liveworks
-
+  Auth Stack by Voltic Labs Inc.
+  
 Parameters:
   AuthName:
     Type: String
@@ -12,44 +12,88 @@ Parameters:
     Type: String
     Default: dev
     Description: The software development environment (ie dev, testing, production, etc...)
-  
-##################################################################################
-#####     Fixes I need to do   #####
-####################################
-# 1. Set this stack up as a nested stack
-# 2. Find way to automatically create RoleMappings string
 
+  UserPoolGivenNameMaxLength: 
+    Type: Number
+    Default: 32
+    Description: Maximum length of the given-name attribute in the User Pool.
+  UserPoolGivenNameMinLength: 
+    Type: Number
+    Default: "1"
+    Description: Minmum length of the given-name attribute in the User Pool.
+
+  UserPoolFamilyNameMaxLength: 
+    Type: Number
+    Default: "32"
+    Description: Maximum length of the family-name attribute in the User Pool.
+  UserPoolFamilyNameMinLength: 
+    Type: Number
+    Default: "1"
+    Description: Minimum length of the family-name attribute in the User Pool.
+
+  UserPoolAboutMeMaxLength: 
+    Type: Number
+    Default: "1024"
+    Description: Maximum length of the family-name attribute in the User Pool.
+  UserPoolAboutMeMinLength: 
+    Type: Number
+    Default: "0"
+    Description: Minimum length of the family-name attribute in the User Pool.
 
 Globals:
   Function:
     Timeout: 20
 
 Resources:
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles: 
+        authenticated: !GetAtt AuthenticatedDefaultRole.Arn
+        unauthenticated: !GetAtt UnauthenticatedDefaultRole.Arn
+      RoleMappings:                                       # See 10A
+        cognito-idp.us-east-1.amazonaws.com/us-east-1_5FTO2BY87:7apdeqh6dgv6tpt17a9i3b8pfq:
+          AmbiguousRoleResolution: Deny
+          Type: Token
+          # RulesConfiguration:                           # See 10B (As to why this is commented out)
+          #   Rules: 
+          #     - Claim: custom:custom_attribute
+          #       MatchType: Equals
+          #       RoleARN: !GetAtt SNSRole.Arn
+          #       Value: aValue
+
+  # AklasToGroupAttachment:
+  #   Type: AWS::Cognito::UserPoolUserToGroupAttachment
+  #   Properties:
+  #     GroupName: !Ref UserPoolGroup
+  #     Username: !GetAtt Aklas.Username                    # See 17A
+  #     UserPoolId: !Ref UserPool
+
   UserPool:                                               # See 6A
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Sub ${AuthName}-User-Pool
       UsernameAttributes:                                 # See 4A
         - email
-      Schema:
-        - AttributeDataType: String
-          DeveloperOnlyAttribute: False
-          Mutable: True
-          Name: family_name
-          # NumberAttributeConstraints:
-          #   NumberAttributeConstraints
-          # StringAttributeConstraints:
-          #   StringAttributeConstraints
-          Required: False
-        - AttributeDataType: String
-          DeveloperOnlyAttribute: False
-          Mutable: False
-          Name: custom_attribute
-          # NumberAttributeConstraints:
-          #   NumberAttributeConstraints
-          # StringAttributeConstraints:
-          #   StringAttributeConstraints
-          Required: False
+      # AliasAttributes:                                    # See 15A
+      #   - email
+      AutoVerifiedAttributes:                             # See 3A
+        - email
+      DeviceConfiguration:
+        DeviceOnlyRememberedOnUserPrompt: True            # See 1A
+        ChallengeRequiredOnNewDevice: True                # See 1B
+      EmailConfiguration:
+        ReplyToEmailAddress: info@volticlabs.com          # See 2A
+        # SourceArn: String                               # See 2B
+      EmailVerificationMessage: Your EmailVerificationMessage code {####}
+      EmailVerificationSubject: Email Subject EmailVerificationSubject
+      MfaConfiguration: OPTIONAL                                            # See 7A
+      SmsConfiguration:
+        ExternalId: !Sub ${AuthName}-SmsConfiguration-externalID            # See 5B
+        SnsCallerArn: !GetAtt SNSRole.Arn                                   # See 5A
+      SmsAuthenticationMessage: Your SmsAuthenticationMessage code {####}
+      SmsVerificationMessage: Your SmsAuthenticationMessage code {####}
       Policies: 
         PasswordPolicy:
           MinimumLength: 8
@@ -61,26 +105,48 @@ Resources:
         AllowAdminCreateUserOnly: False
         UnusedAccountValidityDays: 1
         InviteMessageTemplate: 
-          EmailSubject: EmailSubject {username} {####}
-          EmailMessage: EmailMessage {username} {####}
-          SMSMessage: SMSMessage {username} {####}
-      AutoVerifiedAttributes:                             # See 3A
-        - email
-      DeviceConfiguration:
-        DeviceOnlyRememberedOnUserPrompt: True            # See 1A
-        # ChallengeRequiredOnNewDevice: False             # comeback
-      EmailConfiguration:
-        ReplyToEmailAddress: info@volticlabs.com          # See 2A, see 2B if SourceArn is also set
-      EmailVerificationMessage: Your EmailVerificationMessage code {####}
-      EmailVerificationSubject: Email Subject EmailVerificationSubject
-      MfaConfiguration: OPTIONAL                          # See 7A
-      SmsConfiguration:                                   # comeback
-        ExternalId: SmsConfiguration-externalID           # See 5B
-        SnsCallerArn: !GetAtt SNSRole.Arn                 # See 5A
-      SmsAuthenticationMessage: Your SmsAuthenticationMessage code {####}
-      SmsVerificationMessage: Your SmsAuthenticationMessage code {####}
+          EmailSubject: InviteMessageTemplate-EmailSubject                          # Email invite subject template when user is added by admin?
+          EmailMessage: InviteMessageTemplate-EmailMessage {username} {####}        # Email invite message template when user is added by admin?
+          SMSMessage: InviteMessageTemplate-SMSMessage {username} {####}            # SMS invite template when user is added by admin?
       UserPoolTags:                                       # See 9A
-        CognitoUserPool: !Sub ${AuthName}-User-Pool
+        CognitoUserPool: !Sub ${AuthName}-User-Pool-Tag
+      Schema:                                             # See 11A
+        # Standard Cognito User Pool Attribute
+        - Name: given_name
+          AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: True
+          StringAttributeConstraints:
+            MaxLength: !Ref UserPoolGivenNameMaxLength
+            MinLength: !Ref UserPoolGivenNameMinLength
+          Required: False
+        - Name: family_name
+          AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: True
+          StringAttributeConstraints:
+            MaxLength: !Ref UserPoolFamilyNameMaxLength
+            MinLength: !Ref UserPoolFamilyNameMinLength
+          Required: False
+        - Name: picture
+          AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: True
+          Required: False
+        # Custom Cognito User Pool Attribute
+        - Name: signup_date_time
+          AttributeDataType: DateTime
+          DeveloperOnlyAttribute: False
+          Mutable: False
+          Required: False
+        - Name: about_me
+          AttributeDataType: String
+          DeveloperOnlyAttribute: False
+          Mutable: True
+          StringAttributeConstraints:
+            MaxLength: !Ref UserPoolAboutMeMaxLength
+            MinLength: !Ref UserPoolAboutMeMinLength
+          Required: False
       # LambdaConfig:                                       # See 8A
       #   PreSignUp: !GetAtt PreSignupLambda.Arn
       #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
@@ -91,7 +157,7 @@ Resources:
       #   DefineAuthChallenge: String
       #   VerifyAuthChallengeResponse: String
 
-  IdentityPool:                                       # Comeback - make sure all required feilds are present
+  IdentityPool:                                           # See 14A
     Type: AWS::Cognito::IdentityPool
     Properties:
       IdentityPoolName: !Sub ${AuthName}IdentityPool
@@ -99,93 +165,76 @@ Resources:
       CognitoIdentityProviders: 
         - ClientId: !Ref UserPoolClient
           ProviderName: !GetAtt UserPool.ProviderName
-          ServerSideTokenCheck: True
-
-  IdentityPoolRoleAttachment:
-    Type: AWS::Cognito::IdentityPoolRoleAttachment
-    Properties:
-      IdentityPoolId: !Ref IdentityPool
-      Roles: 
-        authenticated: !GetAtt AuthenticatedDefaultRole.Arn
-        unauthenticated: !GetAtt AuthenticatedDefaultRole.Arn
-      RoleMappings: 
-        cognito-idp.us-east-1.amazonaws.com/us-east-1_10OmmXB3C:7fjghquenen9lhnvv95n0hquse:
-          AmbiguousRoleResolution: Deny
-          Type: Token
-          # RulesConfiguration: 
-          #   Rules: 
-          #     - Claim: custom:custom_attribute
-          #       MatchType: Equals
-          #       RoleARN: !GetAtt SNSRole.Arn
-          #       Value: aValue
-
+          ServerSideTokenCheck: True                        # See 14C
+      # DeveloperProviderName: String                       # See 14B
+      # SupportedLoginProviders: 
+      #   String: String
+      # SamlProviderARNs: 
+      #   - String
+      # OpenIdConnectProviderARNs: 
+      #   - String
+      # CognitoStreams: 
+      #   - CognitoStreams
+      # PushSync: 
+      #   - PushSync
+      # CognitoEvents: 
+      #   String: String
+        
   UserPoolGroup:
     Type: AWS::Cognito::UserPoolGroup
     Properties:
       Description: Description of User Pool Group
       GroupName: GroupName
       Precedence: 2
-      RoleArn: !GetAtt GroupRole.Arn                              # comeback and add role
+      RoleArn: !GetAtt GroupRole.Arn
       UserPoolId: !Ref UserPool
-
-  GroupRole:                                                      # comeback
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: GroupRole
-      AssumeRolePolicyDocument: 
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Deny"
-            Principal: 
-              Federated: "cognito-identity.amazonaws.com"
-            Action: 
-              - "sts:AssumeRoleWithWebIdentity"          
 
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
         ClientName: !Sub ${AuthName}-client
         GenerateSecret: True
-        # ExplicitAuthFlows: 
+        # ExplicitAuthFlows:                              # See 12A
         #   - String
-        # ReadAttributes: 
-        #   - String
-        # WriteAttributes: 
+        ReadAttributes:                                   # Format for custome attributes should be
+          - given_name                                    # custom:attributeName
+          - family_name
+          - picture
+          - custom:about_me
+          - custom:signup_date_time
+        # WriteAttributes:                                # See 13A
         #   - String
         RefreshTokenValidity: 30
         UserPoolId: !Ref UserPool
-
-  # PreSignupLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub ${AuthName}-PreSignup
-  #     CodeUri: Lambdas/nodejs8.10/cognito/
-  #     Handler: PreSignup.lambdaHandler
-  #     Runtime: nodejs8.10
-
-  # PostConfirmationLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub ${AuthName}-PostConfirmation
-  #     CodeUri: Lambdas/nodejs8.10/cognito/
-  #     Handler: PostConfirmation.lambdaHandler
-  #     Runtime: nodejs8.10
-  
-  # PreSignupLambdaExecutionPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties: 
-  #     Action: lambda:InvokeFunction
-  #     FunctionName: !GetAtt PreSignupLambda.Arn
-  #     Principal: cognito-idp.amazonaws.com
-  #     SourceArn: !GetAtt UserPool.Arn
-
-  # PostConfirmationLambdaExecutionPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties: 
-  #     Action: lambda:InvokeFunction
-  #     FunctionName: !GetAtt PostConfirmationLambda.Arn
-  #     Principal: cognito-idp.amazonaws.com
-  #     SourceArn: !GetAtt UserPool.Arn
+      
+  Aklas:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      DesiredDeliveryMediums: 
+        - SMS
+        - EMAIL
+      UserAttributes: 
+        - Name: phone_number
+          Value: "+15879179300"
+        - Name: given_name
+          Value: Aklas
+        - Name: family_name
+          Value: Cheema
+        - Name: picture
+          Value: RANDOM8VALUE30000CE9CE96E551148828248E02C1EDAE9CF04EEABE3AC9D617F
+        - Name: custom:signup_date_time
+          Value: 2019-03-28                               # See 16A
+        - Name: custom:about_me
+          Value: Something About Me
+      Username: aklascheema@gmail.com
+      UserPoolId: !Ref UserPool
+      ForceAliasCreation: True                            # See 16C
+      # MessageAction: String                               # See 16B
+      ValidationData: 
+        - Name: ValidationDataKey1
+          Value: ValidationDataValue1
+        - Name: ValidationDataKey2
+          Value: ValidationDataValue2
 
   SNSRole:
     Type: "AWS::IAM::Role"
@@ -207,6 +256,19 @@ Resources:
               - Effect: "Allow"
                 Action: "sns:publish"
                 Resource: "*"
+  
+  GroupRole:                                              # comeback
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GroupRole
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Deny"
+            Principal: 
+              Federated: "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"    
 
   AuthenticatedDefaultRole:
     Type: AWS::IAM::Role
@@ -240,59 +302,73 @@ Resources:
                 Action:
                   - "lambda:InvokeFunction"
                 Resource: "*"
-
-  Aklas:
-    Type: AWS::Cognito::UserPoolUser
+  UnauthenticatedDefaultRole:
+    Type: AWS::IAM::Role
     Properties:
-      DesiredDeliveryMediums: 
-        - SMS
-        - EMAIL
-      UserAttributes: 
-        - Name: phone_number
-          Value: "+15879179300"
-        - Name: given_name
-          Value: Safi
-      Username: aklascheema@gmail.com
-      UserPoolId: !Ref UserPool
-      # ForceAliasCreation: Boolean
-      # MessageAction: String
-      # ValidationData: 
-      #   - AttributeType
-
-  AklasToGroupAttachment:
-    Type: AWS::Cognito::UserPoolUserToGroupAttachment
-    Properties:
-      GroupName: !Ref UserPoolGroup
-      Username: !Ref Aklas
-      UserPoolId: !Ref UserPool
+      RoleName: UnauthenticatedDefaultRole
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal: 
+              Federated: "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals: 
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: "CognitoAuthorizedPolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action:
+                  - "mobileanalytics:PutEvents"
+                  - "cognito-sync:*"
+                  - "cognito-identity:*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource: "*"
 
   # PreSignupLambda:
   #   Type: AWS::Serverless::Function
   #   Properties:
-  #     CodeUri: Lambdas/java8
-  #     Handler: cognito.PreSignup::handleRequest
-  #     Runtime: java8
-  #     Timeout: 20
+  #     FunctionName: !Sub ${AuthName}-PreSignup
+  #     CodeUri: Lambdas/nodejs8.10/cognito/
+  #     Handler: PreSignup.lambdaHandler
+  #     Runtime: nodejs8.10
+
   # PostConfirmationLambda:
   #   Type: AWS::Serverless::Function
   #   Properties:
-  #     CodeUri: Lambdas/java8
-  #     Handler: cognito.PostConfirmations::handleRequest
-  #     Runtime: java8
-  #     Timeout: 20
-  # SampleLambdaFunction:
-  #   Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-  #   Properties:
-  #     CodeUri: Lambdas/java8/CognitoSync
-  #     #Handler: helloworld.App::handleRequest
-  #     Handler: packagename.App::handleRequest
-  #     Runtime: java8
-  #     Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
-  #       Variables:
-  #         PARAM1: VALUE
+  #     FunctionName: !Sub ${AuthName}-PostConfirmation
+  #     CodeUri: Lambdas/nodejs8.10/cognito/
+  #     Handler: PostConfirmation.lambdaHandler
+  #     Runtime: nodejs8.10
+  
+  # PreSignupLambdaExecutionPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties: 
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt PreSignupLambda.Arn
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt UserPool.Arn
+
+  # PostConfirmationLambdaExecutionPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties: 
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt PostConfirmationLambda.Arn
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt UserPool.Arn
 
 
-# Outputs:
+#Outputs:
 #   SampleLambdaFunction:
 #     Description: "Hello World Lambda Function ARN"
 #     Value: !GetAtt SampleLambdaFunction.Arn
@@ -300,18 +376,20 @@ Resources:
 #     Description: "Implicit IAM Role created for Hello World function"
 #     Value: !GetAtt SampleLambdaFunction.Arn
 
+
+
 ##################################################################################
 #####     CURRENT STATUS    #####
 #################################
 #                  Resource                       |  Instantiation | Partial | Complete
 # ------------------------------------------------|----------------|---------|---------
-#   AWS::Cognito::UserPool                        |        X       |         |         
-#   AWS::Cognito::IdentityPool                    |        X       |         |         
-#   AWS::Cognito::UserPoolClient                  |        X       |         |         
-#   AWS::Cognito::UserPoolGroup                   |        X       |         |         
-#   AWS::Cognito::IdentityPoolRoleAttachment      |        X       |         |                
-#   AWS::Cognito::UserPoolUser                    |        X       |         |         
-#   AWS::Cognito::UserPoolUserToGroupAttachment   |                |         |  
+#   AWS::Cognito::UserPool                        |                |         |    X    
+#   AWS::Cognito::IdentityPool                    |                |         |    X    
+#   AWS::Cognito::UserPoolClient                  |                |         |    X    
+#   AWS::Cognito::UserPoolGroup                   |                |         |    X    
+#   AWS::Cognito::IdentityPoolRoleAttachment      |        X       |         |                NOTE: The RoleMappings idenitity provider needs to be manually copied
+#   AWS::Cognito::UserPoolUser                    |                |         |    X
+#   AWS::Cognito::UserPoolUserToGroupAttachment   |                |         |    X           NOTE: The Username property needs to be manually copied
 # ------------------------------------------------|----------------|---------|---------
 # Instantiation:  The YAML outline of resource copied but commented out
 # Partial:        The resource is instantiated when creating stack but some field still missing
@@ -320,10 +398,10 @@ Resources:
 ##################################################################################
 #####     NOTES    #####
 ########################
-# 1    (DeviceConfiguration)
+# 1    (DeviceConfiguration/DeviceOnlyRememberedOnUserPrompt/ChallengeRequiredOnNewDevice)
 # 1A ) When I changed the DeviceConfiguration setting (ChallengeRequiredOnNewDevice and DeviceOnlyRememberedOnUserPrompt) it changed if the device the user logged in was remebered or not.
-# Below is a table which shows the result of changing all possible configurations. It seems that when DeviceOnlyRememberedOnUserPrompt is set to False (F) the device is always remebered.
-# Or another way (and probablly more right) is that when DeviceOnlyRememberedOnUserPrompt is set to True (T) the uses chooses to opt in. I commented out ChallengeRequiredOnNewDevice and attempted this again.
+# Below is a table which shows the result of all possible configurations. It seems that when DeviceOnlyRememberedOnUserPrompt is set to False (F) the device is always remebered.
+# Or another way (and probablly more right) is that when DeviceOnlyRememberedOnUserPrompt is set to True (T) the user chooses to opt in. I commented out ChallengeRequiredOnNewDevice and attempted this again.
 # I noticied that ChallengeRequiredOnNewDevice has no effect.
 # Thus DeviceOnlyRememberedOnUserPrompt when true sets it to User Opt in else is set to Always.
 # For more information refer to: 
@@ -335,10 +413,12 @@ Resources:
 #             T                 |                F                    |                          Always
 #             F                 |                T                    |                       User Opt in
 #             F                 |                F                    |                          Always
+# 1B ) ChallengeRequiredOnNewDevice: Corresponds to General Settings > Devices > Do you want to use a remembered device to suppress the second factor during multi-factor authentication (MFA)?
+# To enable this you need to ensure that MFA is setup for this User Pool.
 ##################################################################################
 # 2    (EmailConfiguration)
 # 2A ) Allows you define the reply to email address for emails that users get. This can be viewed by going to Message customizations > Do you want to customize your email address? > REPLY-TO email address.
-# 2B ) This setting configure what email address to send the email from by setting the SourceArn. This is only possible if the email addres exists (and thus has an associated Arn). 
+# 2B ) This setting configure what email address to send the email from by setting the SourceArn. This is only possible if the email address exists (and thus has an associated Arn). 
 ##################################################################################
 # 3    (AutoVerifiedAttributes)
 # 3A ) The name (AutoVerifiedAttributes) does not clearly describe what this property does. By setting AutoVerifiedAttributes you are forcing the user to verify that specific attribute.
@@ -370,4 +450,72 @@ Resources:
 ##################################################################################
 # 9    (UserPoolTags)
 # 9A ) The tags to bind to an AWS Cognito User Pool. The formart is a String to String map. So the tag key is specified as the YAML key and the tag value is specified by the YAML key.
-
+##################################################################################
+# 10    (RoleMappings)
+# 10A ) When trying to setup RoleMappings I had an extermely hard time because the documentation was WRONG! Go to the following link:
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cognito-identitypoolroleattachment.html
+# You will notice that it says the following: 
+# 'The string identifies the identity provider, for example, "graph.facebook.com" or "cognito-idp-east-1.amazonaws.com/us-east-1_abcdefghi:app_client_id"'
+# This is WRONG! The example format for the cognito identity provider they give is, "cognito-idp-east-1.amazonaws.com/us-east-1_abcdefghi:app_client_id", which is incorrect.
+# On closer inspection you would notice that it is suppsosed to be us-east-1 and NOT east-1, the following is a correct example:
+# cognito-idp.us-east-1.amazonaws.com/us-east-1_iOanCxGRU:39bme3j847mj0pcv4uc3pktr9
+# So the format should follow the following:
+# cognito-idp.<region>.amazonaws.com/<UserPoolID>:<AppClientID>
+# 10B ) 
+##################################################################################
+# 11    (Schema)
+# 11A ) See the following link to see a list of Standard Cognito User Pool Attributes:
+# https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-attributes.html
+##################################################################################
+# 12    (ExplicitAuthFlows)
+# 12A ) The possible options are ADMIN_NO_SRP_AUTH, CUSTOM_AUTH_FLOW_ONLY and USER_PASSWORD_AUTH.
+# ADMIN_NO_SRP_AUTH:      Use this option if you have a server that is trying to get tokens without getting authorization code.
+# CUSTOM_AUTH_FLOW_ONLY:  You define your authorization flow and don't use the OAuth2 authorization flow.
+# USER_PASSWORD_AUTH:     You don't use SRP (NOT RECOMMENDED!) and directly get the tokens back from the Auth Server.
+# For more information see the following links:
+# https://stackoverflow.com/questions/54238306/what-the-settings-mean-in-aws-cognito-user-pool-app-client
+# https://www.digitalocean.com/community/tutorials/an-introduction-to-oauth-2
+# https://oauth.net/2/grant-types/
+##################################################################################
+# 13    (WriteAttributes)
+# 13A ) I decided to not allow an App Client to be able to directly write to the Cognito User Pool and this the App Client won't be able to change that information directly.
+# It will still be changeable but indirectly. When a trigger of some sort executes (ie via DynamoDB) this will call a Lambda function which will force have permission to change these attributes.
+# Thus the state of the users information in DynamoDB (or whereever else) stays consistent with the information about the user in the User Pool.
+# This has to be done this way because there is no way for us to detect when a change in the users information occurs in the User Pool. You could use the Cognito lambda triggers but those only execute once in a while and thus aren't instant. 
+##################################################################################
+# 14    (IdentityPool)
+# 14A ) Some of the sub settings have been commented out because they are not required for most of the use cases Voltic Labs thinks it will be handling. Thus this general/default template doesn't include them.
+# You can uncomment and include them if desired.
+# 14B ) DeveloperProviderName is a setting if you are setting up a Developer Authenticated Identity. See the following for more information:
+# https://docs.aws.amazon.com/cognito/latest/developerguide/developer-authenticated-identities.html
+# https://aws.amazon.com/blogs/mobile/integrating-amazon-cognito-using-developer-authenticated-identities-an-end-to-end-example/
+# 14C ) ServerSideTokenCheck checks to make sure whether or not a user is signed out or deleted. This makes sure you can instantly revoke valid status (not signed out globally or deleted) of a token. 
+# https://docs.aws.amazon.com/cognitoidentity/latest/APIReference/API_CognitoIdentityProvider.html
+# https://github.com/amazon-archives/amazon-cognito-identity-js/issues/21
+##################################################################################
+# 15    (AliasAttributes)
+# 15A ) This corresponds to General settings > Attributes > How do you want your end users to sign in? > Username - Users can use a username and optionally multiple alternatives to sign up and sign in
+# You can have either AliasAttributes or UsernameAttributes uncommented.
+##################################################################################
+# 16    (UserAttributes)
+# 16A ) When specifying Cognito User Pool attribute of type DateTime you can specify just the date or date and time.
+# When specifying date and time it should be in the format : [yyyy-mm-dd hh:mm:ss timezone], an example is 2019-03-28 03:59:16 GMT.
+# When specify date the format should be : [yyyy-mm-dd], an example is 2019-03-28.
+# If the format is wrong you will get the following substring in the error message via Cloudformation under 'Status reason' when creating/updating the stack,
+# "DateTime should be in format : [yyyy-mm-dd hh:mm:ss timezone]"
+# For more information refer to the following:
+# https://github.com/aws/aws-sdk-java/issues/1396
+# https://en.wikipedia.org/wiki/ISO_8601
+# 16B ) See the following links for more info:
+# https://any-api.com/amazonaws_com/cognito_idp/docs/_AdminCreateUser/AdminCreateUser
+# https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_AdminCreateUser.html
+# 16C ) See the following links for more info:
+# https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ConfirmSignUp.html#CognitoUserPools-ConfirmSignUp-request-ForceAliasCreation
+##################################################################################
+# 17    (AklasToGroupAttachment)
+# 17A ) For the username field you need to manually copy the sub (for example, 96343ae3-a0ee-4063-ae53-d6b2c4210a49) field of a user in a User Pool.
+# You can't use !Ref or anything like that. I (Aklas) asked on the Cloudformation chaneel on slack (awsdevelopers.slack.com) and was told to create a custom resource.
+# For more info see the links below:
+# https://stackoverflow.com/questions/51800442/how-to-get-cognito-users-username-in-cloudformation
+# https://forums.aws.amazon.com/thread.jspa?messageID=875407
+##################################################################################
