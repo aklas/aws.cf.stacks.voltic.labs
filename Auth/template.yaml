@@ -355,10 +355,47 @@ Resources:
 
 
 
-#########################################################################################################################################################
-##   CUSTOM RESOURCES   ##
-##########################
-# https://github.com/juan-dambra/CloudFormationCognitoCustomResources
+##################################################################################
+#####     CUSTOM RESOURCES    #####
+###################################
+  # https://forums.aws.amazon.com/thread.jspa?threadID=255584
+  CloudFormationCognitoRoleMapping:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudFormationCognitoRoleMapping
+      Runtime: nodejs8.10
+      Code: ./CustomResources/CloudFormationCognitoRoleMapping.js
+      Handler: CloudFormationCognitoRoleMapping.handler
+      Role: !GetAtt LambdaForCloudFormationRole.Arn
+      Description: Transform to generate maps with computed keys
+    DependsOn: CloudFormationSendResponse
+
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles: 
+        authenticated: !GetAtt AuthenticatedDefaultRole.Arn
+        unauthenticated: !GetAtt UnauthenticatedDefaultRole.Arn
+      RoleMappings: !GetAtt IdentityPoolRoleAttachmentMapping.RoleMappings         # See 10A
+  
+  IdentityPoolRoleAttachmentMapping:
+    Type: Custom::DynamicMapTransform
+    Properties:
+      ServiceToken: !GetAtt CloudFormationCognitoRoleMapping.Arn
+      AttributeName: RoleMappings
+      Entries:
+        - Key: !Sub ${UserPool.ProviderName}:${UserPoolClient}
+          Value:
+            AmbiguousRoleResolution: Deny
+            Type: Rules                                                            # See 10B
+            RulesConfiguration:
+              Rules:
+                - Claim: custom:user_type
+                  MatchType: Equals
+                  RoleARN: !GetAtt GroupRole.Arn
+                  Value: worker
+  # https://github.com/juan-dambra/CloudFormationCognitoCustomResources
   UserPoolClientSettings:
     Type: Custom::CognitoUserPoolClientSettings
     Properties:
@@ -471,133 +508,7 @@ Resources:
                 Effect: Allow
                 Action: 'lambda:InvokeFunction'
                 Resource: 'arn:aws:lambda:*:*:function:*'
-
 #########################################################################################################################################################
-  # CloudFormationCognitoUserPoolClientSettings:
-  #   Type: AWS::Lambda::Function
-  #   Properties:
-  #     FunctionName: CloudFormationCognitoUserPoolClientSettings
-  #     Runtime: nodejs8.10
-  #     Code: ./CustomResources/CloudFormationCognitoUserPoolClientSettings.js
-  #     Handler: CloudFormationCognitoUserPoolClientSettings.handler
-  #     Role: !GetAtt LambdaForCloudFormationRole.Arn
-    
-  # # transform to map with dynamic keys #
-  # IdentityPoolRoleAttachmentMapping:
-  #   Type: Custom::DynamicMapTransform
-  #   Properties:
-  #     ServiceToken: !GetAtt CloudFormationCognitoRoleMapping.Arn
-  #     AttributeName: RoleMappings
-  #     Entries:
-  #       - Key: !Sub ${UserPool.ProviderName}:${UserPoolClient}
-  #         Value:
-  #           AmbiguousRoleResolution: Deny
-  #           Type: Rules
-  #           RulesConfiguration:
-  #             Rules: 
-  #               - Claim: custom:user_type
-  #                 MatchType: Equals
-  #                 RoleARN: !GetAtt GroupRole.Arn
-  #                 Value: worker
-  # https://forums.aws.amazon.com/thread.jspa?threadID=255584
-
-# https://liveworks.auth.us-east-1.amazoncognito.com/login?response_type=code&client_id=7hbnmbav11s8felc1ksj0qol5q&redirect_uri=https://google.com
-# https://volticlabs.auth.us-east-1.amazoncognito.com/login?response_type=code&client_id=6ss6tmrr1d9krivlnc86jv0621&redirect_uri=https://google.com
-
-  CloudFormationCognitoRoleMapping:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: CloudFormationCognitoRoleMapping
-      Runtime: nodejs8.10
-      Code: ./CustomResources/CloudFormationCognitoRoleMapping.js
-      Handler: CloudFormationCognitoRoleMapping.handler
-      Role: !GetAtt LambdaForCloudFormationRole.Arn
-      Description: Transform to generate maps with computed keys
-    DependsOn: CloudFormationSendResponse
-
-  # CloudFormationCognitoRoleMapping:
-  #   Type: AWS::Lambda::Function
-  #   Properties:
-  #     FunctionName: CloudFormationCognitoRoleMapping
-  #     Description: Transform to generate maps with computed keys
-  #     Handler: index.handler
-  #     Role: !GetAtt LambdaForCloudFormationRole.Arn
-  #     Runtime: nodejs6.10
-  #     Code:
-  #       ZipFile: |
-  #         const { send, SUCCESS, ERROR } = require('cfn-response');
-  #         exports.handler = (event, context, callback) => {
-  #           console.log(JSON.stringify(event, null, 2));
-  #           const { RequestType, ResourceProperties: props = { } } = event;
-  #           const { Entries: entries = [ ], AttributeName: attName } = props;
-  
-  #           switch(RequestType) {
-  #             case 'Create':
-  #             case 'Update':
-  #               const result = { };
-  #               for (let i = 0; i < entries.length; i++) {
-  #                 const { Key, Value } = entries[i]
-  #                 if (Key) {
-  #                   result[Key] = Value
-  #                 }
-  #               }
-  #               send(event, context, SUCCESS, { [attName]: result });
-  #               break;
-  #             case 'Delete':
-  #               send(event, context, SUCCESS);
-  #               break;
-  #           }
-  #         };
-    
-  # transform to map with dynamic keys #
-  IdentityPoolRoleAttachmentMapping:
-    Type: Custom::DynamicMapTransform
-    Properties:
-      ServiceToken: !GetAtt CloudFormationCognitoRoleMapping.Arn
-      AttributeName: RoleMappings
-      Entries:
-        - Key: !Sub ${UserPool.ProviderName}:${UserPoolClient}
-          Value:
-            AmbiguousRoleResolution: Deny
-            Type: Rules
-            RulesConfiguration:
-              Rules: 
-                - Claim: custom:user_type
-                  MatchType: Equals
-                  RoleARN: !GetAtt GroupRole.Arn
-                  Value: worker
-
-  IdentityPoolRoleAttachment:
-    Type: AWS::Cognito::IdentityPoolRoleAttachment
-    Properties:
-      IdentityPoolId: !Ref IdentityPool
-      Roles: 
-        authenticated: !GetAtt AuthenticatedDefaultRole.Arn
-        unauthenticated: !GetAtt UnauthenticatedDefaultRole.Arn
-      RoleMappings: !GetAtt IdentityPoolRoleAttachmentMapping.RoleMappings
-
-
-
-
-      # RoleMappings:                                       # See 10A
-      #   cognito-idp.us-east-1.amazonaws.com/us-east-1_aeHmiQYxq:4rq5ooj1384bo18f14lfjoaj1d:
-      #     AmbiguousRoleResolution: Deny
-      #     Type: Rules                                     # See 10B
-      #     RulesConfiguration:
-      #       Rules: 
-      #         - Claim: custom:user_type
-      #           MatchType: Equals
-      #           RoleARN: !GetAtt GroupRole.Arn
-      #           Value: worker
-#########################################################################################################################################################
-
-
-
-
-
-
-
-
 #Outputs:
 #   SampleLambdaFunction:
 #     Description: "Hello World Lambda Function ARN"
@@ -687,10 +598,21 @@ Resources:
 # You will notice that it says the following: 
 # 'The string identifies the identity provider, for example, "graph.facebook.com" or "cognito-idp-east-1.amazonaws.com/us-east-1_abcdefghi:app_client_id"'
 # This is WRONG! The example format for the cognito identity provider they give is, "cognito-idp-east-1.amazonaws.com/us-east-1_abcdefghi:app_client_id", which is incorrect.
-# On closer inspection you would notice that it is suppsosed to be us-east-1 and NOT east-1, the following is a correct example:
+# On closer inspection you will notice that it is suppsosed to be us-east-1 and NOT east-1, the following is a correct example:
 # cognito-idp.us-east-1.amazonaws.com/us-east-1_iOanCxGRU:39bme3j847mj0pcv4uc3pktr9
 # So the format should follow the following:
 # cognito-idp.<region>.amazonaws.com/<UserPoolID>:<AppClientID>
+# I revisted this problem again and have now created a custom resource to generate the RoleMappings, but reference I have copied over the old portion here:
+# RoleMappings:
+#   cognito-idp.us-east-1.amazonaws.com/us-east-1_aeHmiQYxq:4rq5ooj1384bo18f14lfjoaj1d:
+#     AmbiguousRoleResolution: Deny
+#     Type: Rules
+#     RulesConfiguration:
+#       Rules: 
+#         - Claim: custom:user_type
+#           MatchType: Equals
+#           RoleARN: !GetAtt GroupRole.Arn
+#           Value: worker
 # 10B ) You can use the User Pool group (the preferred roles claims),Token, or use can use the attributes (claims from token) to a role, Rules.
 # For more info visit the following:
 # http://www.youtube.com/watch?v=VZqG7HjT2AQ&t=10m48s
