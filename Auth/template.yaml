@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
+
 Description: >
   Auth Stack by Voltic Labs Inc.
-  
+
 Parameters:
   AuthName:
     Type: String
@@ -40,29 +40,7 @@ Parameters:
     Default: "0"
     Description: Minimum length of the family-name attribute in the User Pool.
 
-Globals:
-  Function:
-    Timeout: 20
-
 Resources:
-  IdentityPoolRoleAttachment:
-    Type: AWS::Cognito::IdentityPoolRoleAttachment
-    Properties:
-      IdentityPoolId: !Ref IdentityPool
-      Roles: 
-        authenticated: !GetAtt AuthenticatedDefaultRole.Arn
-        unauthenticated: !GetAtt UnauthenticatedDefaultRole.Arn
-      RoleMappings:                                       # See 10A
-        cognito-idp.us-east-1.amazonaws.com/us-east-1_LbvqwR1zG:72gd3hhmq7p4hfuitu3j20msqk:
-          AmbiguousRoleResolution: Deny
-          Type: Rules                                     # See 10B
-          RulesConfiguration:
-            Rules: 
-              - Claim: custom:user_type
-                MatchType: Equals
-                RoleARN: !GetAtt GroupRole.Arn
-                Value: worker
-
   # AklasToGroupAttachment:
   #   Type: AWS::Cognito::UserPoolUserToGroupAttachment
   #   Properties:
@@ -351,14 +329,6 @@ Resources:
   #     Handler: PreSignup.lambdaHandler
   #     Runtime: nodejs8.10
 
-  # PostConfirmationLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub ${AuthName}-PostConfirmation
-  #     CodeUri: Lambdas/nodejs8.10/cognito/
-  #     Handler: PostConfirmation.lambdaHandler
-  #     Runtime: nodejs8.10
-  
   # PreSignupLambdaExecutionPermission:
   #   Type: AWS::Lambda::Permission
   #   Properties: 
@@ -367,6 +337,14 @@ Resources:
   #     Principal: cognito-idp.amazonaws.com
   #     SourceArn: !GetAtt UserPool.Arn
 
+  # PostConfirmationLambda:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: !Sub ${AuthName}-PostConfirmation
+  #     CodeUri: Lambdas/nodejs8.10/cognito/
+  #     Handler: PostConfirmation.lambdaHandler
+  #     Runtime: nodejs8.10
+
   # PostConfirmationLambdaExecutionPermission:
   #   Type: AWS::Lambda::Permission
   #   Properties: 
@@ -374,6 +352,250 @@ Resources:
   #     FunctionName: !GetAtt PostConfirmationLambda.Arn
   #     Principal: cognito-idp.amazonaws.com
   #     SourceArn: !GetAtt UserPool.Arn
+
+
+
+#########################################################################################################################################################
+##   CUSTOM RESOURCES   ##
+##########################
+# https://github.com/juan-dambra/CloudFormationCognitoCustomResources
+  UserPoolClientSettings:
+    Type: Custom::CognitoUserPoolClientSettings
+    Properties:
+      ServiceToken: !GetAtt CloudFormationCognitoUserPoolClientSettings.Arn
+      UserPoolId: !Ref UserPool
+      UserPoolClientId: !Ref UserPoolClient
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURL: https://www.volticlabs.com
+      LogoutURL: https://www.volticlabs.com
+      AllowedOAuthFlowsUserPoolClient: True                              #See18A
+      AllowedOAuthFlows:                                                 #See18B          # Comeback
+        - code
+      AllowedOAuthScopes:                                                #See18C          # Comeback
+        - openid
+
+  UserPoolDomain:
+    Type: Custom::CognitoUserPoolDomain
+    Properties:
+      ServiceToken: !GetAtt CloudFormationCognitoUserPoolDomain.Arn
+      UserPoolId: !Ref UserPool
+      Domain: userpool-test-01aivhela3f23cheyovfs
+
+  CloudFormationSendResponse:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudFormationSendResponse
+      Runtime: nodejs8.10
+      Code: ./CustomResources/CloudFormationSendResponse
+      Handler: index.handler
+      Role: !GetAtt LambdaForCloudFormationRole.Arn
+
+  CloudFormationCognitoUserPoolClientSettings:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudFormationCognitoUserPoolClientSettings
+      Runtime: nodejs8.10
+      Code: ./CustomResources/CloudFormationCognitoUserPoolClientSettings.js
+      Handler: CloudFormationCognitoUserPoolClientSettings.handler
+      Role: !GetAtt LambdaForCloudFormationRole.Arn
+    DependsOn: CloudFormationSendResponse
+
+  CloudFormationCognitoUserPoolDomain:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudFormationCognitoUserPoolDomain
+      Runtime: nodejs8.10
+      Code: ./CustomResources/CloudFormationCognitoUserPoolDomain.js
+      Handler: CloudFormationCognitoUserPoolDomain.handler
+      Role: !GetAtt LambdaForCloudFormationRole.Arn
+    DependsOn: CloudFormationSendResponse
+
+  LambdaForCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaForCloudFormationRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action: 'sts:AssumeRole'
+            Principal:
+              Service: lambda.amazonaws.com
+      Policies:
+        -
+          PolicyName: WriteCloudWatchLogs
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              -
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+        -
+          PolicyName: UpdateUserPoolClient
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              -
+                Effect: Allow
+                Action: 'cognito-idp:UpdateUserPoolClient'
+                Resource: 'arn:aws:cognito-idp:*:*:userpool/*'
+        -
+          PolicyName: ManageUserPoolDomain
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              -
+                Effect: Allow
+                Action: 'cognito-idp:CreateUserPoolDomain'
+                Resource: 'arn:aws:cognito-idp:*:*:userpool/*'
+              -
+                Effect: Allow
+                Action: 'cognito-idp:DeleteUserPoolDomain'
+                Resource: 'arn:aws:cognito-idp:*:*:userpool/*'
+              -
+                Effect: Allow
+                Action: 'cognito-idp:DescribeUserPoolDomain'
+                Resource: '*'
+        -
+          PolicyName: InvokeLambdaFunction
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              -
+                Effect: Allow
+                Action: 'lambda:InvokeFunction'
+                Resource: 'arn:aws:lambda:*:*:function:*'
+
+#########################################################################################################################################################
+  # CloudFormationCognitoUserPoolClientSettings:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: CloudFormationCognitoUserPoolClientSettings
+  #     Runtime: nodejs8.10
+  #     Code: ./CustomResources/CloudFormationCognitoUserPoolClientSettings.js
+  #     Handler: CloudFormationCognitoUserPoolClientSettings.handler
+  #     Role: !GetAtt LambdaForCloudFormationRole.Arn
+    
+  # # transform to map with dynamic keys #
+  # IdentityPoolRoleAttachmentMapping:
+  #   Type: Custom::DynamicMapTransform
+  #   Properties:
+  #     ServiceToken: !GetAtt CloudFormationCognitoRoleMapping.Arn
+  #     AttributeName: RoleMappings
+  #     Entries:
+  #       - Key: !Sub ${UserPool.ProviderName}:${UserPoolClient}
+  #         Value:
+  #           AmbiguousRoleResolution: Deny
+  #           Type: Rules
+  #           RulesConfiguration:
+  #             Rules: 
+  #               - Claim: custom:user_type
+  #                 MatchType: Equals
+  #                 RoleARN: !GetAtt GroupRole.Arn
+  #                 Value: worker
+  # https://forums.aws.amazon.com/thread.jspa?threadID=255584
+
+# https://liveworks.auth.us-east-1.amazoncognito.com/login?response_type=code&client_id=7hbnmbav11s8felc1ksj0qol5q&redirect_uri=https://google.com
+# https://volticlabs.auth.us-east-1.amazoncognito.com/login?response_type=code&client_id=6ss6tmrr1d9krivlnc86jv0621&redirect_uri=https://google.com
+
+  CloudFormationCognitoRoleMapping:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudFormationCognitoRoleMapping
+      Runtime: nodejs8.10
+      Code: ./CustomResources/CloudFormationCognitoRoleMapping.js
+      Handler: CloudFormationCognitoRoleMapping.handler
+      Role: !GetAtt LambdaForCloudFormationRole.Arn
+      Description: Transform to generate maps with computed keys
+    DependsOn: CloudFormationSendResponse
+
+  # CloudFormationCognitoRoleMapping:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: CloudFormationCognitoRoleMapping
+  #     Description: Transform to generate maps with computed keys
+  #     Handler: index.handler
+  #     Role: !GetAtt LambdaForCloudFormationRole.Arn
+  #     Runtime: nodejs6.10
+  #     Code:
+  #       ZipFile: |
+  #         const { send, SUCCESS, ERROR } = require('cfn-response');
+  #         exports.handler = (event, context, callback) => {
+  #           console.log(JSON.stringify(event, null, 2));
+  #           const { RequestType, ResourceProperties: props = { } } = event;
+  #           const { Entries: entries = [ ], AttributeName: attName } = props;
+  
+  #           switch(RequestType) {
+  #             case 'Create':
+  #             case 'Update':
+  #               const result = { };
+  #               for (let i = 0; i < entries.length; i++) {
+  #                 const { Key, Value } = entries[i]
+  #                 if (Key) {
+  #                   result[Key] = Value
+  #                 }
+  #               }
+  #               send(event, context, SUCCESS, { [attName]: result });
+  #               break;
+  #             case 'Delete':
+  #               send(event, context, SUCCESS);
+  #               break;
+  #           }
+  #         };
+    
+  # transform to map with dynamic keys #
+  IdentityPoolRoleAttachmentMapping:
+    Type: Custom::DynamicMapTransform
+    Properties:
+      ServiceToken: !GetAtt CloudFormationCognitoRoleMapping.Arn
+      AttributeName: RoleMappings
+      Entries:
+        - Key: !Sub ${UserPool.ProviderName}:${UserPoolClient}
+          Value:
+            AmbiguousRoleResolution: Deny
+            Type: Rules
+            RulesConfiguration:
+              Rules: 
+                - Claim: custom:user_type
+                  MatchType: Equals
+                  RoleARN: !GetAtt GroupRole.Arn
+                  Value: worker
+
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles: 
+        authenticated: !GetAtt AuthenticatedDefaultRole.Arn
+        unauthenticated: !GetAtt UnauthenticatedDefaultRole.Arn
+      RoleMappings: !GetAtt IdentityPoolRoleAttachmentMapping.RoleMappings
+
+
+
+
+      # RoleMappings:                                       # See 10A
+      #   cognito-idp.us-east-1.amazonaws.com/us-east-1_aeHmiQYxq:4rq5ooj1384bo18f14lfjoaj1d:
+      #     AmbiguousRoleResolution: Deny
+      #     Type: Rules                                     # See 10B
+      #     RulesConfiguration:
+      #       Rules: 
+      #         - Claim: custom:user_type
+      #           MatchType: Equals
+      #           RoleARN: !GetAtt GroupRole.Arn
+      #           Value: worker
+#########################################################################################################################################################
+
+
+
+
+
+
 
 
 #Outputs:
@@ -530,4 +752,22 @@ Resources:
 # For more info see the links below:
 # https://stackoverflow.com/questions/51800442/how-to-get-cognito-users-username-in-cloudformation
 # https://forums.aws.amazon.com/thread.jspa?messageID=875407
+##################################################################################
+# 18    (UserPoolClientSettings)
+# 18A ) If you set this to True (which you should always) it means that OAuth was enabled. If you set his to false you will get the following error message in the AWS Cognito User Pool Console:
+# Your User Pool app client settings have been modified via the Cognito User Pools API (using a Lambda or CLI), and OAuth was not enabled. See the documentation for more details.
+# The documentation they are reffering to point to the following:
+# https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_UpdateUserPoolClient.html#CognitoUserPools-UpdateUserPoolClient-request-AllowedOAuthFlowsUserPoolClient
+# It states the following:
+# Set to TRUE if the client is allowed to follow the OAuth protocol when interacting with Cognito user pools.
+# 18B ) The allowed allowed OAuth flows (AllowedOAuthFlows) can include from the following: 
+# Authorization code grant (code): Use this with PKCE for mobile apps
+# Implicit grant (implicit): Use this if you can't use Authroization code grant
+# Client credentials (client_credentials): For machine-machine communication
+# For more information see:
+# https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_UpdateUserPoolClient.html#CognitoUserPools-UpdateUserPoolClient-request-AllowedOAuthFlows
+# https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-app-idp-settings.html
+# 18C ) YOU MUST SET THIS IF YOU SET AllowedOAuthFlows.
+# See the following for more information:
+# https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-app-idp-settings.html
 ##################################################################################
