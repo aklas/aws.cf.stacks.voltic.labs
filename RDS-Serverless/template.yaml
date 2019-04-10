@@ -1,0 +1,373 @@
+AWSTemplateFormatVersion: '2010-09-09'
+# https://github.com/widdix/aws-cf-templates/blob/master/state/rds-aurora-serverless.yaml#L197
+# Other references:
+# https://github.com/awslabs/aws-cloudformation-templates/blob/master/aws/services/RDS/RDS_with_DBParameterGroup.yaml
+
+Description: >
+  RDS Stack by Voltic Labs Inc.
+
+Parameters:
+  DBName:
+    Type: String
+    Default: VolticRDS
+    Description: Unique RDS Name for the AWS resources related to RDS
+  ReleaseEnvironment: 
+    Type: String
+    Default: dev
+    Description: The software development environment (ie dev, testing, production, etc...)
+
+  # ParentVPCStack:
+  #   Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
+  #   Type: String
+  # ParentClientStack:
+  #   Description: 'Stack name of parent client stack based on state/client-sg.yaml template.'
+  #   Type: String
+  # ParentKmsKeyStack:
+  #   Description: 'Stack name of parent KMS key stack based on security/kms-key.yaml template (ignored when DBSnapshotIdentifier is set, value used from snapshot).'
+  #   Type: String
+  #   Default: ''
+  # ParentZoneStack:
+  #   Description: 'Optional stack name of parent zone stack based on vpc/vpc-zone-*.yaml template.'
+  #   Type: String
+  #   Default: ''
+  # ParentSSHBastionStack:
+  #   Description: 'Optional but recommended stack name of parent SSH bastion host/instance stack based on vpc/vpc-*-bastion.yaml template.'
+  #   Type: String
+  #   Default: ''
+  # ParentAlertStack:
+  #   Description: 'Optional but recommended stack name of parent alert stack based on operations/alert.yaml template.'
+  #   Type: String
+  #   Default: ''
+  Engine:
+    Description: The name of the database engine that you want to use for this DB cluster.
+    Type: String
+    AllowedValues:
+    - aurora # MySQL 5.6-compatible Aurora
+    Default: aurora
+  # DBSnapshotIdentifier:
+  #   Description: 'Optional identifier for the DB cluster snapshot from which you want to restore (leave blank to create an empty cluster).'
+  #   Type: String
+  #   Default: ''
+  # DBName:
+  #   Description: 'Name of the database (ignored when DBSnapshotIdentifier is set, value used from snapshot).'
+  #   Type: String
+  #   Default: ''
+  DBBackupRetentionPeriod:
+    Description: The number of days to keep snapshots of the cluster. The number of days that Amazon RDS should retain automatic backups of this DB instance.
+    Type: Number
+    MinValue: 1
+    MaxValue: 35
+    Default: 1
+  DBMasterUsername:
+    Description: The master user name for the DB instance (ignored when DBSnapshotIdentifier is set, value used from snapshot).
+    Type: String
+    Default: Aklas
+  DBMasterUserPassword:
+    Description: The master password for the DB instance (ignored when DBSnapshotIdentifier is set, value used from snapshot).
+    Type: String
+    NoEcho: true
+    Default: test1234
+  # SubDomainNameWithDot:
+  #   Description: 'Name that is used to create the DNS entry with trailing dot, e.g. §{SubDomainNameWithDot}§{HostedZoneName}. Leave blank for naked (or apex and bare) domain. Requires ParentZoneStack parameter!'
+  #   Type: String
+  #   Default: 'aurora.'
+  PreferredBackupWindow:
+    Description: The daily time range in UTC during which you want to create automated backups.
+    Type: String
+    Default: '09:54-10:24'
+  PreferredMaintenanceWindow:
+    Description: The weekly time range (in UTC) during which system maintenance can occur.
+    Type: String
+    Default: 'sat:07:00-sat:07:30'
+  AutoPause:
+    Description: Enable automatic pause for a Serverless Aurora cluster. A cluster can be paused only when it has no connections. If a cluster is paused for more than seven days, the cluster might be backed up with a snapshot. In this case, the cluster is restored when there is a request to connect to it.
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+  MaxCapacity:
+    Description: The maximum capacity units for a Serverless Aurora cluster.
+    Type: String
+    AllowedValues: [2, 4, 8, 16, 32, 64, 128, 256]
+    Default: 2
+  MinCapacity:
+    Description: The minimum capacity units for a Serverless Aurora cluster.
+    Type: String
+    AllowedValues: [2, 4, 8, 16, 32, 64, 128, 256]
+    Default: 2
+  SecondsUntilAutoPause:
+    Description: The time, in seconds, before a Serverless Aurora cluster is paused.
+    Type: Number
+    MinValue: 1
+    MaxValue: 86400
+    Default: 300
+
+Mappings:
+  EngineMap:
+    aurora:
+      EngineVersion: '5.6.10a'
+      Port: 3306
+      ClusterParameterGroupFamily: 'aurora5.6'
+
+Resources:
+
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-secretsmanager-secrettargetattachment.html
+  SecretTargetAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref RDSSecret
+      TargetType: AWS::RDS::DBCluster
+      TargetId: !Ref DBCluster
+  
+  # Use the following link to see an example on how to generate a secret:
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-secretsmanager-secrettargetattachment.html
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: RDSSecret
+      Description: Secret for the Aurora Serverless instance
+      # KmsKeyId: String                                                          # Using default KMS CMK for encryption, comeback and change me
+      SecretString: '{"username":"Aklas","password":"test1234"}'
+      # GenerateSecretString: 
+      #   GenerateSecretString
+      Tags: 
+        - Key: RDSSecretKey
+          Value: RDSSecretValue
+  
+  DBClusterParameterGroup:                                                        # See 1A
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: DBClusterParameterGroup Description
+      Family: !FindInMap [EngineMap, !Ref Engine, ClusterParameterGroupFamily]
+      Parameters:
+        character_set_client: utf8
+        character_set_connection: utf8
+        character_set_database: utf8
+        character_set_filesystem: utf8
+        character_set_results: utf8
+        character_set_server: utf8
+        collation_connection: utf8_general_ci
+        collation_server: utf8_general_ci
+      Tags:
+        - Key: DBClusterParameterGroupKey
+          Value: DBClusterParameterGroupValue
+
+  DBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      AvailabilityZones:                                                         # See 2B
+        - us-east-1a
+        - us-east-1b
+        - us-east-1c
+      BackupRetentionPeriod: !Ref DBBackupRetentionPeriod
+      DatabaseName: !Sub ${DBName}DBCluster
+      DBClusterIdentifier: DBClusterIdentifier                                   # Creates the RDS endpoint for you connect to
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      DeletionProtection: False
+      StorageEncrypted: True
+      Engine: aurora
+      EngineMode: serverless
+      EngineVersion: !FindInMap [EngineMap, !Ref Engine, EngineVersion]
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterUserPassword
+      Port: 3306
+      PreferredBackupWindow: !Ref PreferredBackupWindow
+      PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+      ScalingConfiguration:
+        AutoPause: !Ref AutoPause
+        MaxCapacity: !Ref MaxCapacity
+        MinCapacity: !Ref MinCapacity
+        SecondsUntilAutoPause: !Ref SecondsUntilAutoPause
+      Tags:
+        - Key: RDSTagKey
+          Value: RDSTagValue
+      # --Options that I need to come back to and add latter
+      # EnableIAMDatabaseAuthentication: Boolean                                  # See 2C
+      # KmsKeyId: String                                                          # See 2A
+      # DBSubnetGroupName: String
+      # VpcSecurityGroupIds:
+      #   - String
+      # EnableCloudwatchLogsExports:                                              # See 2H
+      #   - String
+      # SnapshotIdentifier: String                                                # See 2G
+      # --Options that are not applicable
+      # BacktrackWindow: 100000                                                   # See 2E
+      # ReplicationSourceIdentifier: String                                       # See 2D
+      # SourceRegion: us-east-1                                                   # See 2F
+
+  # RDSKMSKey:
+  #   Type: AWS::KMS::Key
+  #   Properties: 
+  #     Description: KMS key for RDS Aurora Serverless instance
+  #     Enabled: true
+  #     EnableKeyRotation: false
+  #     KeyPolicy: JSON object
+  #     KeyUsage: ENCRYPT_DECRYPT                                                  # https://docs.aws.amazon.com/kms/latest/APIReference/API_KeyMetadata.html
+  #     PendingWindowInDays: 30                                                    # https://docs.aws.amazon.com/kms/latest/APIReference/API_ScheduleKeyDeletion.html
+  #     Tags:
+  #       - Key: RDSKMSKeyKey
+  #         Value: RDSKMSKeyValue
+
+
+#Outputs:
+#   SampleLambdaFunction:
+#     Description: "Hello World Lambda Function ARN"
+#     Value: !GetAtt SampleLambdaFunction.Arn
+#   SampleLambdaFunction:
+#     Description: "Implicit IAM Role created for Hello World function"
+#     Value: !GetAtt SampleLambdaFunction.Arn
+
+#########################################################################################################################################################
+#####     CUSTOM RESOURCES    #####
+###################################
+  # DBInitialize:                                                                   # See 4A
+  #   Type: Custom::DBInitialize
+  #   Properties:
+  #     ServiceToken: !GetAtt CloudFormationRDSDBInitialize.Arn
+      
+  #     # EnableDataAPI: true
+  #     # DBClusterIdentifier: !Ref DBCluster
+
+  CloudFormationRDSDBInitialize:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudFormationRDSDBInitialize
+      Runtime: nodejs8.10
+      Code: ./CustomResources/CloudFormationRDSDBInitialize
+      Handler: index.handler
+      Role: !GetAtt RDSLambdaForCloudFormationRole.Arn
+    DependsOn: CloudFormationSendResponse
+
+  DataAPI:                                                                        # See 3A
+    Type: Custom::RDSDataAPI
+    Properties:
+      ServiceToken: !GetAtt CloudFormationRDSDataAPI.Arn
+      EnableDataAPI: true
+      DBClusterIdentifier: !Ref DBCluster
+
+  CloudFormationRDSDataAPI:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudFormationRDSDataAPI
+      Runtime: nodejs8.10
+      Code: ./CustomResources/CloudFormationRDSDataAPI
+      Handler: index.handler
+      Role: !GetAtt RDSLambdaForCloudFormationRole.Arn
+    DependsOn: CloudFormationSendResponse
+
+  CloudFormationSendResponse:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: CloudFormationSendResponseRDS
+      Runtime: nodejs8.10
+      Code: ./CustomResources/CloudFormationSendResponse
+      Handler: index.handler
+      Role: !GetAtt RDSLambdaForCloudFormationRole.Arn
+
+  RDSLambdaForCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: RDSLambdaForCloudFormationRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action: 'sts:AssumeRole'
+            Principal:
+              Service: lambda.amazonaws.com
+      Policies:
+        -
+          PolicyName: WriteCloudWatchLogs
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              -
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+        -
+          PolicyName: InvokeLambdaFunction
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              -
+                Effect: Allow
+                Action: 'lambda:InvokeFunction'
+                Resource: 'arn:aws:lambda:*:*:function:*'
+        -
+          PolicyName: ManageRDS
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement:
+              - 
+                Effect: Allow
+                Action: rds:ModifyDBCluster
+                Resource: "*"
+        -
+          PolicyName: ReadS3
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement:
+            - 
+              Effect: Allow
+              Action: s3:GetObject
+              Resource: "*"
+        
+#########################################################################################################################################################
+
+##################################################################################
+#####     NOTES    #####
+########################
+# 1    (DBClusterParameterGroup)
+# 1A ) The Parameter Group allows you to specify some settings for DB instances of a particular family (aurora5.6, MySQL5.7, etc..) and then attach an instance to the Parameter Group.
+# Thus all attached instances will use the settings for that Parameter Group.
+# By default if you don't specify a Parameter group for a database then the default Parameter group is use for that family.
+# This is for advance users only. For more information see the links below:
+# https://docs.rightscale.com/cm/dashboard/clouds/aws/actions/rds_parameter_groups_actions.html
+# https://aws.amazon.com/articles/amazon-rds-db-parameter-group-deployment-guide/
+# https://scalr-wiki.atlassian.net/wiki/spaces/docs/pages/1776895/DB+Parameter+Groups
+# https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_WorkingWithParamGroups.html
+# https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless.how-it-works.html
+##################################################################################
+# 2    (DBCluster)
+# 2A ) KmsKeyId lets you specify your own master key for encryption instead of having to use the default one.
+# If you set StorageEncypted to true but don't specify KmsKeyId, the default master key is used. If you specify KmsKeyId (you own master key for encryption) you must set StorageEncypted to true.
+# 2B ) AvailabilityZones is A list of Availability Zones (AZs) in which DB instances in the cluster can be created. 
+# I am not sure about this but I think it also lets you implicity decide which AZ to start an instance in case a failover occurs. 
+# You will get a CF error if you specify more than three AZs.
+# It has 6-way replication, 2 per AZ, see the following for more info:
+# http://www.youtube.com/watch?v=4DqNk7ZTYjA&t=3m25s
+# For more information visit:
+# https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless.how-it-works.html#aurora-serverless.failover
+# For a list of Regions and AZs visit the following link:
+# https://gist.github.com/neilstuartcraig/0ccefcf0887f29b7f240
+# 2C ) This option might not work for serverless. See the following link and go to the features that aren't supported:
+# https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless.html
+# 2D ) The Amazon Resource Name (ARN) of the source Amazon RDS DB instance or DB cluster, if this DB cluster is created as a Read Replica.
+# I am not sure if you can create read replicas for Aurora Serverless thus I don't think it is applicable.
+# 2E ) The target backtrack window, in seconds. To disable backtracking, specify 0. If specified, this property must be set to a number from 0 to 259,200 (72 hours).
+# This is not supported for Aurora Serverless, if you attempt to enable it you will get the following error:
+# "Backtrack is not supported for the serverless engine mode."
+# 2F ) The AWS Region which contains the source DB cluster when replicating a DB cluster. For example, us-east-1.
+# I don't think this is applicable since we are not replicating a DB cluster.
+# 2G ) The identifier for the DB cluster snapshot from which you want to restore.
+# You can create a snapshot of your DB anytime, including when deleteing (prompt will notify you if you want to create a snapshot). They are also created automatically.
+# Then you can use that snapshot to create a new DB (restore) with same data.
+# 2H ) The list of log types that need to be enabled for exporting to CloudWatch Logs. For more info visit the following:
+# https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_LogAccess.html#USER_LogAccess.Procedural.UploadtoCloudWatch
+# http://www.youtube.com/watch?v=fxNmMQvOjbA&t=2m55s
+##################################################################################
+# 3    (DataAPI)
+# 3A ) A custom resource to allow you to enable the Data API for AWS Aurora Serverless. 
+# For more info visit:
+# https://aws.amazon.com/about-aws/whats-new/2018/11/aurora-serverless-data-api-beta/
+# https://docs.amazonaws.cn/en_us/AmazonRDS/latest/AuroraUserGuide/data-api.html
+##################################################################################
+# 3    (DBInitialize)
+# 3A ) Initializes the Aurora Serverless instance with the DB schema.
+# This is accomplished by reading and executing a predefined MySQL script by the lambda function that backs the custom resource.
+# The lambda function will read the SQL script and run it against the DB instance which will set up the schema if not already done so.
+##################################################################################

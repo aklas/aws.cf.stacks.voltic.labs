@@ -46,7 +46,7 @@ exports.handler = async (event) => {
                 }
                 // send(event, context, SUCCESS, { [attName]: result });
                 await sendCloudFormationResponse(event, 'SUCCESS', { [attName]: result });
-                break; 
+                break;
             case 'Delete':
                 // send(event, context, SUCCESS);
                 await sendCloudFormationResponse(event, 'SUCCESS');

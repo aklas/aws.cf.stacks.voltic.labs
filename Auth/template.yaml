@@ -40,6 +40,11 @@ Parameters:
     Default: "0"
     Description: Minimum length of the family-name attribute in the User Pool.
 
+  UserPoolDomainName:
+    Type: String
+    Default: volticlabs
+    Description: Amazon Cognito domain (subdomain) for a user pool
+
 Resources:
   # AklasToGroupAttachment:
   #   Type: AWS::Cognito::UserPoolUserToGroupAttachment
@@ -69,7 +74,7 @@ Resources:
       MfaConfiguration: OPTIONAL                                            # See 7A
       SmsConfiguration:
         ExternalId: !Sub ${AuthName}-SmsConfiguration-externalID            # See 5B
-        SnsCallerArn: !GetAtt SNSRole.Arn                                   # See 5A
+        SnsCallerArn: !GetAtt UserPoolSNSRole.Arn                                   # See 5A
       SmsAuthenticationMessage: Your SmsAuthenticationMessage code {####}
       SmsVerificationMessage: Your SmsAuthenticationMessage code {####}
       Policies: 
@@ -130,8 +135,8 @@ Resources:
           DeveloperOnlyAttribute: False
           Mutable: False
           Required: False
-      # LambdaConfig:                                       # See 8A
-      #   PreSignUp: !GetAtt PreSignupLambda.Arn
+      LambdaConfig:                                       # See 8A
+        PreSignUp: !GetAtt PreSignupLambda.Arn
       #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
       #   PreAuthentication: String
       #   PostAuthentication: String
@@ -171,25 +176,6 @@ Resources:
       Precedence: 2
       RoleArn: !GetAtt GroupRole.Arn
       UserPoolId: !Ref UserPool
-
-  UserPoolClient:
-    Type: AWS::Cognito::UserPoolClient
-    Properties:
-        ClientName: !Sub ${AuthName}-client
-        GenerateSecret: True
-        # ExplicitAuthFlows:                              # See 12A
-        #   - String
-        ReadAttributes:                                   # Format for custome attributes should be
-          - given_name                                    # custom:attributeName
-          - family_name
-          - picture
-          - custom:about_me
-          - custom:signup_date_time
-          - custom:user_type
-        # WriteAttributes:                                # See 13A
-        #   - String
-        RefreshTokenValidity: 30
-        UserPoolId: !Ref UserPool
       
   Aklas:
     Type: AWS::Cognito::UserPoolUser
@@ -222,7 +208,7 @@ Resources:
         - Name: ValidationDataKey2
           Value: ValidationDataValue2
 
-  SNSRole:
+  UserPoolSNSRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument: 
@@ -243,7 +229,7 @@ Resources:
                 Action: "sns:publish"
                 Resource: "*"
   
-  GroupRole:                                              # comeback
+  GroupRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: GroupRole
@@ -321,21 +307,24 @@ Resources:
                   - "lambda:InvokeFunction"
                 Resource: "*"
 
-  # PreSignupLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub ${AuthName}-PreSignup
-  #     CodeUri: Lambdas/nodejs8.10/cognito/
-  #     Handler: PreSignup.lambdaHandler
-  #     Runtime: nodejs8.10
+  PreSignupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: PreSignupLambda
+      Runtime: nodejs8.10
+      Code: ./Lambdas/nodejs8.10/cognito/PreSignup.js
+      Handler: PreSignup.lambdaHandler
+      Role: !GetAtt LambdaForCloudFormationRole.Arn
 
-  # PreSignupLambdaExecutionPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties: 
-  #     Action: lambda:InvokeFunction
-  #     FunctionName: !GetAtt PreSignupLambda.Arn
-  #     Principal: cognito-idp.amazonaws.com
-  #     SourceArn: !GetAtt UserPool.Arn
+  # https://stackoverflow.com/questions/42460846/when-i-try-to-login-using-aws-cognito-i-get-an-accessdeniedexception-about-my-cu
+  # Try to see if you can make FunctionName a list so that you can save some space
+  PreSignupLambdaExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PreSignupLambda.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
 
   # PostConfirmationLambda:
   #   Type: AWS::Serverless::Function
@@ -355,7 +344,8 @@ Resources:
 
 
 
-##################################################################################
+
+#########################################################################################################################################################
 #####     CUSTOM RESOURCES    #####
 ###################################
   # https://forums.aws.amazon.com/thread.jspa?threadID=255584
@@ -395,7 +385,30 @@ Resources:
                   MatchType: Equals
                   RoleARN: !GetAtt GroupRole.Arn
                   Value: worker
-  # https://github.com/juan-dambra/CloudFormationCognitoCustomResources
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+        ClientName: !Sub ${AuthName}-client
+        GenerateSecret: True
+        # ExplicitAuthFlows:                              # See 12A
+        #   - String
+        # To set Read/Write attributes use UserPoolClientSettings
+        # When doing updates it may mess up so you should specify the exact
+        # attributes here also
+        ReadAttributes:                                   # Format for custome attributes should be
+          - given_name                                    # custom:attributeName
+          - family_name
+          - picture
+          - custom:about_me
+          - custom:signup_date_time
+          - custom:user_type
+        # # WriteAttributes:                                # See 13A
+        # #   - String
+        RefreshTokenValidity: 30
+        UserPoolId: !Ref UserPool
+      
+  # https://github.com/rosberglinhares/CloudFormationCognitoCustomResources
   UserPoolClientSettings:
     Type: Custom::CognitoUserPoolClientSettings
     Properties:
@@ -406,18 +419,28 @@ Resources:
         - COGNITO
       CallbackURL: https://www.volticlabs.com
       LogoutURL: https://www.volticlabs.com
-      AllowedOAuthFlowsUserPoolClient: True                              #See18A
-      AllowedOAuthFlows:                                                 #See18B          # Comeback
+      AllowedOAuthFlowsUserPoolClient: True                              #See 18A
+      AllowedOAuthFlows:                                                 #See 18B          # Comeback
         - code
-      AllowedOAuthScopes:                                                #See18C          # Comeback
+      AllowedOAuthScopes:                                                #See 18C          # Comeback
         - openid
+      ReadAttributes:                                   # Format for custome attributes should be
+        - given_name                                    # custom:attributeName
+        - family_name
+        - picture
+        - custom:about_me
+        - custom:signup_date_time
+        - custom:user_type
+      # WriteAttributes:                                # See 13A
+      #   - given_name
+    DependsOn: UserPoolClient
 
   UserPoolDomain:
     Type: Custom::CognitoUserPoolDomain
     Properties:
       ServiceToken: !GetAtt CloudFormationCognitoUserPoolDomain.Arn
       UserPoolId: !Ref UserPool
-      Domain: userpool-test-01aivhela3f23cheyovfs
+      Domain: !Ref UserPoolDomainName
 
   CloudFormationSendResponse:
     Type: AWS::Lambda::Function
@@ -427,6 +450,7 @@ Resources:
       Code: ./CustomResources/CloudFormationSendResponse
       Handler: index.handler
       Role: !GetAtt LambdaForCloudFormationRole.Arn
+    DependsOn: UserPool
 
   CloudFormationCognitoUserPoolClientSettings:
     Type: AWS::Lambda::Function
@@ -568,7 +592,7 @@ Resources:
 # 4    (UsernameAttributes)
 # 4A ) Allows you choose if email address and/or phone number to be used as username to sign up and sign in. This corresponds to General setting > Attributes > How do you want your end users to sign in? > Email address or phone number
 ##################################################################################
-# 5    (SNSRole)
+# 5    (UserPoolSNSRole)
 # 5A ) The IAM role that allows AWS Cognito to have permission to send SMS messages. This corresponds to General settings > MFA and verifications > You must provide a role to allow Amazon Cognito to send SMS messages
 # 5B ) I am not too sure about this. Has to do something with IAM, will comeback to this. Can learn more about it at:
 # https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user_externalid.html

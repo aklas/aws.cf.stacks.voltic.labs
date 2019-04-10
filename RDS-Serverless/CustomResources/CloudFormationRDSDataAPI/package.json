@@ -1,0 +1,14 @@
+{
+  "name": "lambda-hash-service",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Bon Sethi",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.437.0"
+  }
+}
