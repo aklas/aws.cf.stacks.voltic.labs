@@ -160,7 +160,7 @@ Resources:
         - us-east-1c
       BackupRetentionPeriod: !Ref DBBackupRetentionPeriod
       DatabaseName: !Sub ${DBName}DBCluster
-      DBClusterIdentifier: DBClusterIdentifier                                   # Creates the RDS endpoint for you connect to
+      DBClusterIdentifier: dbclusteridentifier                                   # Creates the RDS endpoint for you connect to, keep lower case
       DBClusterParameterGroupName: !Ref DBClusterParameterGroup
       DeletionProtection: False
       StorageEncrypted: True
@@ -219,13 +219,23 @@ Resources:
 #########################################################################################################################################################
 #####     CUSTOM RESOURCES    #####
 ###################################
-  # DBInitialize:                                                                   # See 4A
-  #   Type: Custom::DBInitialize
-  #   Properties:
-  #     ServiceToken: !GetAtt CloudFormationRDSDBInitialize.Arn
-      
-  #     # EnableDataAPI: true
-  #     # DBClusterIdentifier: !Ref DBCluster
+  DBInitialize:                                                                   # See 4A
+    Type: Custom::DBInitialize
+    Properties:
+      ServiceToken: !GetAtt CloudFormationRDSDBInitialize.Arn
+      SecretId: !Ref RDSSecret
+      RDSArn:                                                                 # Arn of Serverless RDS Aurora instance
+        !Join
+          - ':'
+          - - !Sub arn:aws:rds
+            - !Ref AWS::Region
+            - !Ref AWS::AccountId
+            - 'cluster'
+            - !Ref DBCluster
+      Bucket: "aws-sam-stacks"
+      Key: "DBInfo/Schema_Script.sql"
+      Rand: "Nothing"
+    DependsOn: CloudFormationRDSDataAPI
 
   CloudFormationRDSDBInitialize:
     Type: AWS::Lambda::Function
@@ -315,7 +325,19 @@ Resources:
               Effect: Allow
               Action: s3:GetObject
               Resource: "*"
-        
+        -
+          PolicyName: RDSACCESS                               # comeback to this and scope down policy and maker easier to read
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - 
+                Effect: Allow
+                Action: rds-data:ExecuteSql
+                Resource: "*"
+              - 
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: "*"
 #########################################################################################################################################################
 
 ##################################################################################
