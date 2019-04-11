@@ -110,8 +110,7 @@ Mappings:
 
 Resources:
 
-  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-secretsmanager-secrettargetattachment.html
-  SecretTargetAttachment:
+  SecretTargetAttachment:                                                         # See 5A
     Type: AWS::SecretsManager::SecretTargetAttachment
     Properties:
       SecretId: !Ref RDSSecret
@@ -160,7 +159,7 @@ Resources:
         - us-east-1c
       BackupRetentionPeriod: !Ref DBBackupRetentionPeriod
       DatabaseName: !Sub ${DBName}DBCluster
-      DBClusterIdentifier: dbclusteridentifier                                   # Creates the RDS endpoint for you connect to, keep lower case
+      DBClusterIdentifier: dbclusteridentifier                                   # See 2I
       DBClusterParameterGroupName: !Ref DBClusterParameterGroup
       DeletionProtection: False
       StorageEncrypted: True
@@ -207,15 +206,6 @@ Resources:
   #       - Key: RDSKMSKeyKey
   #         Value: RDSKMSKeyValue
 
-
-#Outputs:
-#   SampleLambdaFunction:
-#     Description: "Hello World Lambda Function ARN"
-#     Value: !GetAtt SampleLambdaFunction.Arn
-#   SampleLambdaFunction:
-#     Description: "Implicit IAM Role created for Hello World function"
-#     Value: !GetAtt SampleLambdaFunction.Arn
-
 #########################################################################################################################################################
 #####     CUSTOM RESOURCES    #####
 ###################################
@@ -224,7 +214,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt CloudFormationRDSDBInitialize.Arn
       SecretId: !Ref RDSSecret
-      RDSArn:                                                                 # Arn of Serverless RDS Aurora instance
+      RDSArn:                                                                     # See 4B
         !Join
           - ':'
           - - !Sub arn:aws:rds
@@ -234,7 +224,6 @@ Resources:
             - !Ref DBCluster
       Bucket: "aws-sam-stacks"
       Key: "DBInfo/Schema_Script.sql"
-      Rand: "Nothing"
     DependsOn: CloudFormationRDSDataAPI
 
   CloudFormationRDSDBInitialize:
@@ -340,7 +329,7 @@ Resources:
                 Resource: "*"
 #########################################################################################################################################################
 
-##################################################################################
+#########################################################################################################################################################
 #####     NOTES    #####
 ########################
 # 1    (DBClusterParameterGroup)
@@ -381,6 +370,11 @@ Resources:
 # 2H ) The list of log types that need to be enabled for exporting to CloudWatch Logs. For more info visit the following:
 # https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_LogAccess.html#USER_LogAccess.Procedural.UploadtoCloudWatch
 # http://www.youtube.com/watch?v=fxNmMQvOjbA&t=2m55s
+# 2I ) Creates the RDS endpoint for you connect to. You should make sure this feild is lowercase.
+# !Ref DBCluster returns the exact value that you assigned under DBClusterIdentifier which can be problematic if it is not all lowercase. This is because the name portion of the Arn for a DB Cluster (AWS::RDS::DBCluster) will be a lowercase version of the value you assign to DBClusterIdentifier. 
+# Therefore since the custom resource of type Custom::DBInitialize requires the Arn of the DB Cluster (RDSArn feild) which uses !Ref DBCluster and the name portion of the Arn is always lowercase you should ensure that the value assigned to DBClusterIdentifier is all lowercase.
+# For more information on the format of DB Cluster Arn see the following link (As far as I know it doesn't explictly mention anything about lowercase):
+# https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Tagging.ARN.html
 ##################################################################################
 # 3    (DataAPI)
 # 3A ) A custom resource to allow you to enable the Data API for AWS Aurora Serverless. 
@@ -388,8 +382,12 @@ Resources:
 # https://aws.amazon.com/about-aws/whats-new/2018/11/aurora-serverless-data-api-beta/
 # https://docs.amazonaws.cn/en_us/AmazonRDS/latest/AuroraUserGuide/data-api.html
 ##################################################################################
-# 3    (DBInitialize)
-# 3A ) Initializes the Aurora Serverless instance with the DB schema.
-# This is accomplished by reading and executing a predefined MySQL script by the lambda function that backs the custom resource.
-# The lambda function will read the SQL script and run it against the DB instance which will set up the schema if not already done so.
-##################################################################################
+# 4    (DBInitialize)
+# 4A ) Initalizes the database with a pre defined MySQL script.
+# 4B ) Defines the Arn of the DB Cluster you are specifying to run the script against.
+#########################################################################################################################################################
+# 5    (SecretTargetAttachment)
+# 5A ) For more info see the following link:
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-secretsmanager-secrettargetattachment.html
+#########################################################################################################################################################
+
