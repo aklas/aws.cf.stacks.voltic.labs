@@ -30,7 +30,6 @@ hs_err_pid*
 
 packaged.yaml
 .aws-sam
-Dep-Pip
 
 .settings
 .classpath
