@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Voltic Labs sample root stack.
+
+# Parameters:
+#   RDSStackTemplateURL:
+#       Type: String
+#       Description: The S3 bucklet URL specifying where the template for the nested RDS Stack
+
+Resources:
+#########################################################################################################################################################
+#####     NESTED STACKS       #####
+###################################
+  # TestStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     # NotificationARNs:
+  #     #   - String
+  #     # Parameters:
+  #     #   AWS CloudFormation Stack Parameters
+  #     TemplateURL: "./NestedStack/packaged.yaml"
+  #     # TemplateURL: https://s3.amazonaws.com/aws-sam-stacks/1ed7663fd16c64951de708a23dac78d7
+  #     TimeoutInMinutes: 15
+
+  RDSStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      # NotificationARNs:
+      #   - String
+      # Parameters:
+      #   AWS CloudFormation Stack Parameters
+      Tags:
+        - Key: RDSStackKey
+          Value: RDSStackValue
+      TemplateURL: "./RDS-Aurora-Serverless/packaged.yaml"
+      TimeoutInMinutes: 30
+
+  Cognito:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      # NotificationARNs:
+      #   - String
+      # Parameters:
+      #   AWS CloudFormation Stack Parameters
+      Tags:
+        - Key: CognitoStackKey
+          Value: CognitoStackValue
+      TemplateURL: "./Auth/packaged.yaml"
+      TimeoutInMinutes: 15
+#########################################################################################################################################################
+#####     SHARED RESOURCES    #####
+###################################
+
+#########################################################################################################################################################
+#####     CUSTOM RESOURCES    #####
+###################################
+
+#########################################################################################################################################################
+
+#########################################################################################################################################################
+#####     NOTES    #####
+########################
+# 1    ()
+# 1A ) 
+##################################################################################

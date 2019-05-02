@@ -2,7 +2,7 @@ const AWS = require('aws-sdk');
 const S3  = new AWS.S3();
 const RDS = new AWS.RDSDataService();
 
-exports.handler = async (event, context) => {
+exports.handler = async (event) => {
     console.log("Running RDS Initializers");
     console.log(JSON.stringify(event, null, 2));
     console.log(JSON.stringify(context, null, 2));

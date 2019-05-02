@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  A Test Stack
+
+Resources:
+  # UserPool:
+  #   Type: AWS::Cognito::UserPool
+  #   Properties:
+  #     UserPoolName: "TEST"
+
+  # CloudFormationCognitoRoleMapping:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: CloudFormationCognitoRoleMapping
+  #     Runtime: nodejs8.10
+  #     Code: ./CustomResources/CloudFormationCognitoRoleMapping.js
+  #     Handler: CloudFormationCognitoRoleMapping.handler
+  #     Role: !GetAtt LambdaForCloudFormationRole.Arn
+  #     Description: Transform to generate maps with computed keys
+  #   DependsOn: CloudFormationSendResponse
+  
+  Test:
+    Type: "AWS::Lambda::Function"
+    Properties: 
+      FunctionName: Test
+      Code: "./Lambdas/nodejs8.10/cognito/Test.js"
+      # Code:
+      #   ZipFile: >
+      #     exports.lambdaHandler = (event, context, callback) => {
+      #       console.log("Hello World");
+      #     };
+      Handler: Test.lambdaHandler
+      Role: !GetAtt LambdaForCloudFormationRole.Arn
+      Runtime: nodejs8.10
+
+  LambdaForCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaForCloudFormationRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action: 'sts:AssumeRole'
+            Principal:
+              Service: lambda.amazonaws.com
+      Policies:
+        -
+          PolicyName: WriteCloudWatchLogs
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              -
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+

@@ -4,7 +4,5 @@
 # sam package --output-template-file packaged.yaml --s3-bucket aws-sam-stacks 
 # sam deploy --template-file packaged.yaml --stack-name liveworksABC --capabilities CAPABILITY_NAMED_IAM
 
-aws s3 cp ./DBInfo/Schema_Script.sql s3://aws-sam-stacks/DBInfo/
-
 aws cloudformation package --template-file template.yaml --s3-bucket aws-sam-stacks --output-template-file packaged.yaml --debug
-aws cloudformation deploy --template-file packaged.yaml --stack-name RDS-Learn0 --capabilities CAPABILITY_NAMED_IAM
+aws cloudformation deploy --template-file packaged.yaml --stack-name NestStackTest --capabilities CAPABILITY_NAMED_IAM

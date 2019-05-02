@@ -261,6 +261,7 @@ Resources:
       Code: ./CustomResources/CloudFormationSendResponse
       Handler: index.handler
       Role: !GetAtt RDSLambdaForCloudFormationRole.Arn
+    DependsOn: DBCluster
 
   RDSLambdaForCloudFormationRole:
     Type: AWS::IAM::Role

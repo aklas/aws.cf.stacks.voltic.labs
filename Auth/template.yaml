@@ -137,13 +137,13 @@ Resources:
           Required: False
       LambdaConfig:                                       # See 8A
         PreSignUp: !GetAtt PreSignupLambda.Arn
-      #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
-      #   PreAuthentication: String
-      #   PostAuthentication: String
-      #   CreateAuthChallenge: String
-      #   CustomMessage: String
-      #   DefineAuthChallenge: String
-      #   VerifyAuthChallengeResponse: String
+        # PostConfirmation: !GetAtt PostConfirmationLambda.Arn
+        # PreAuthentication: String
+        # PostAuthentication: String
+        # CreateAuthChallenge: String
+        # CustomMessage: String
+        # DefineAuthChallenge: String
+        # VerifyAuthChallengeResponse: String
 
   IdentityPool:                                           # See 14A
     Type: AWS::Cognito::IdentityPool
@@ -312,8 +312,8 @@ Resources:
     Properties:
       FunctionName: PreSignupLambda
       Runtime: nodejs8.10
-      Code: ./Lambdas/nodejs8.10/cognito/PreSignup.js
-      Handler: PreSignup.lambdaHandler
+      Code: ./Lambdas/nodejs8.10/cognito/PreSignup
+      Handler: index.lambdaHandler
       Role: !GetAtt LambdaForCloudFormationRole.Arn
 
   # https://stackoverflow.com/questions/42460846/when-i-try-to-login-using-aws-cognito-i-get-an-accessdeniedexception-about-my-cu
@@ -354,8 +354,8 @@ Resources:
     Properties:
       FunctionName: CloudFormationCognitoRoleMapping
       Runtime: nodejs8.10
-      Code: ./CustomResources/CloudFormationCognitoRoleMapping.js
-      Handler: CloudFormationCognitoRoleMapping.handler
+      Code: ./CustomResources/CloudFormationCognitoRoleMapping
+      Handler: index.handler
       Role: !GetAtt LambdaForCloudFormationRole.Arn
       Description: Transform to generate maps with computed keys
     DependsOn: CloudFormationSendResponse
@@ -457,8 +457,8 @@ Resources:
     Properties:
       FunctionName: CloudFormationCognitoUserPoolClientSettings
       Runtime: nodejs8.10
-      Code: ./CustomResources/CloudFormationCognitoUserPoolClientSettings.js
-      Handler: CloudFormationCognitoUserPoolClientSettings.handler
+      Code: ./CustomResources/CloudFormationCognitoUserPoolClientSettings
+      Handler: index.handler
       Role: !GetAtt LambdaForCloudFormationRole.Arn
     DependsOn: CloudFormationSendResponse
 
@@ -467,8 +467,8 @@ Resources:
     Properties:
       FunctionName: CloudFormationCognitoUserPoolDomain
       Runtime: nodejs8.10
-      Code: ./CustomResources/CloudFormationCognitoUserPoolDomain.js
-      Handler: CloudFormationCognitoUserPoolDomain.handler
+      Code: ./CustomResources/CloudFormationCognitoUserPoolDomain
+      Handler: index.handler
       Role: !GetAtt LambdaForCloudFormationRole.Arn
     DependsOn: CloudFormationSendResponse
 

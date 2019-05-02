@@ -37,37 +37,49 @@ exports.handler = async (event) => {
 
 ///////////////////////////////////////////////////////////////////////////////////
 
-const AWS = require('aws-sdk');
+// const AWS = require('aws-sdk');
 
-exports.handler = async (event) => {
-    try {
-        const enableDataAPI = event.ResourceProperties.EnableDataAPI
-        // event.ResourceProperties.UserPoolId
-        console.log(JSON.stringify(event, null, 2));
+// exports.handler = async (event) => {
+//     try {
+//         const enableDataAPI = event.ResourceProperties.EnableDataAPI
+//         // event.ResourceProperties.UserPoolId
+//         console.log(JSON.stringify(event, null, 2));
 
-        switch(event.RequestType) {
-            case 'Create':              // On a 'Create' it should fall through to 'Update'
+//         switch(event.RequestType) {
+//             case 'Create':              // On a 'Create' it should fall through to 'Update'
 
-            case 'Update':
-                // send(event, context, SUCCESS, { [attName]: result });
-                await sendCloudFormationResponse(event, 'SUCCESS', { [attName]: result });
-                break;
-            case 'Delete':
-                // send(event, context, SUCCESS);
-                await sendCloudFormationResponse(event, 'SUCCESS');
-                break;
-            default:
-                // send(event, context, SUCCESS);
-                await sendCloudFormationResponse(event, 'SUCCESS');
-                break;
-        }
-        console.info(`DynamicMapTransform Success for request type ${event.RequestType}`);
-    } catch (error) {
-        console.error(`DynamicMapTransform Error for request type ${event.RequestType}:`, error);
-        await sendCloudFormationResponse(event, 'FAILED');
+//             case 'Update':
+//                 // send(event, context, SUCCESS, { [attName]: result });
+//                 await sendCloudFormationResponse(event, 'SUCCESS', { [attName]: result });
+//                 break;
+//             case 'Delete':
+//                 // send(event, context, SUCCESS);
+//                 await sendCloudFormationResponse(event, 'SUCCESS');
+//                 break;
+//             default:
+//                 // send(event, context, SUCCESS);
+//                 await sendCloudFormationResponse(event, 'SUCCESS');
+//                 break;
+//         }
+//         console.info(`DynamicMapTransform Success for request type ${event.RequestType}`);
+//     } catch (error) {
+//         console.error(`DynamicMapTransform Error for request type ${event.RequestType}:`, error);
+//         await sendCloudFormationResponse(event, 'FAILED');
+//     }
+// }
+
+async function deleteUserPoolDomain(cognitoIdentityServiceProvider, domain) {
+    var response = await cognitoIdentityServiceProvider.describeUserPoolDomain({
+        Domain: domain
+    }).promise();
+    
+    if (response.DomainDescription.Domain) {
+        await cognitoIdentityServiceProvider.deleteUserPoolDomain({
+            UserPoolId: response.DomainDescription.UserPoolId,
+            Domain: domain
+        }).promise();
     }
 }
-
 async function sendCloudFormationResponse(event, responseStatus, responseData) {
     var params = {
         FunctionName: 'CloudFormationSendResponse',

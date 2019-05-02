@@ -1,0 +1,27 @@
+#!/bin/bash
+# RDS Stack
+#   Setting up variables
+templateFile="template.yaml"
+bucketName="aws-sam-stacks"
+S3Prefix=""
+outputTemplateFile="packaged.yaml"
+useJSON=$false
+forceUpload=$true
+
+#   Uploading MySQL script from RDS Stack
+# aws s3 cp ./DBInfo/Schema_Script.sql s3://aws-sam-stacks/DBInfo/
+
+#   Packaging RDS Stack
+aws cloudformation package \
+--template-file $templateFile \
+--s3-bucket $bucketName \
+--s3-prefix $S3Prefix \
+--output-template-file $outputTemplateFile \
+# --use-json $useJSON \
+# --force-upload $forceUpload \
+--debug
+# --kms-key-id  \
+# --metadata  \
+
+
+# aws cloudformation deploy --template-file packaged.yaml --stack-name RDS-Learn0 --capabilities CAPABILITY_NAMED_IAM
