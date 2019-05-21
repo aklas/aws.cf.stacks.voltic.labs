@@ -1,49 +1,62 @@
 #!/bin/bash
 
 ##################################################################################
-#####     Root Stack Variables                          #####
+#####     Root Stack Variables              #####
 ##################################################################################
 #   Setting up variables
-templateFile="template.yaml"
+templateFile="rootStackTemplate.yaml"
 bucketName="aws-sam-stacks"
 S3Prefix=""
-outputTemplateFile="packaged.yaml"
+outputTemplateFile="rootStackPackaged.yaml"
 useJSON=$false
 forceUpload=$true
 stackName="TEST"
 ##################################################################################
-#####     Root Stack Pre-Porcessing                     #####
+#####     Root Stack Pre-Porcessing         #####
 ##################################################################################
 #   Uploading MySQL script from Nested RDS Stack
-aws s3 cp ./RDS-Aurora-Serverless/DBInfo/Schema_Script.sql s3://aws-sam-stacks/DBInfo/
+# aws s3 cp ./RDS-Aurora-Serverless/DBInfo/Schema_Script.sql s3://aws-sam-stacks/DBInfo/
 ##################################################################################
-#####     Packaging RDS-Aurora-Serverless Stack        #####
-##################################################################################
-aws cloudformation package \
---template-file "./RDS-Aurora-Serverless/template.yaml" \
---s3-bucket $bucketName \
---output-template-file "./RDS-Aurora-Serverless/packaged.yaml" \
-# --use-json $useJSON \
-# --force-upload $forceUpload \
-# --debug
-# --s3-prefix "$S3Prefix/package" \
-# --kms-key-id  \
-# --metadata  \
-##################################################################################
-#####     Packaging Auth Stack                          #####
+#####     Packaging Nested Lambda-Layers Stack                #####
 ##################################################################################
 aws cloudformation package \
---template-file "./Auth/template.yaml" \
+--template-file "./Lambda-Layers/template.yaml" \
 --s3-bucket $bucketName \
---output-template-file "./Auth/packaged.yaml" \
-# --use-json $useJSON \
-# --force-upload $forceUpload \
-# --debug
-# --s3-prefix "$S3Prefix/package" \
-# --kms-key-id  \
-# --metadata  \
+--output-template-file "./Lambda-Layers/packaged.yaml" \
+    # --use-json $useJSON \
+    # --force-upload $forceUpload \
+    # --debug
+    # --s3-prefix "$S3Prefix/package" \
+    # --kms-key-id  \
+    # --metadata  \
 ##################################################################################
-#####     Packaging Root Stack          #####
+#####     Packaging Nested RDS-Aurora-Serverless Stack        #####
+##################################################################################
+# aws cloudformation package \
+# --template-file "./RDS-Aurora-Serverless/template.yaml" \
+# --s3-bucket $bucketName \
+# --output-template-file "./RDS-Aurora-Serverless/packaged.yaml" \
+    # --use-json $useJSON \
+    # --force-upload $forceUpload \
+    # --debug
+    # --s3-prefix "$S3Prefix/package" \
+    # --kms-key-id  \
+    # --metadata  \
+##################################################################################
+#####     Packaging Nested Auth Stack                         #####
+##################################################################################
+# aws cloudformation package \
+# --template-file "./Auth/template.yaml" \
+# --s3-bucket $bucketName \
+# --output-template-file "./Auth/packaged.yaml" \
+    # --use-json $useJSON \
+    # --force-upload $forceUpload \
+    # --debug
+    # --s3-prefix "$S3Prefix/package" \
+    # --kms-key-id  \
+    # --metadata  \
+##################################################################################
+#####     Packaging Root Stack              #####
 ##################################################################################
 aws cloudformation package \
 --template-file $templateFile \
@@ -56,7 +69,7 @@ aws cloudformation package \
 # --kms-key-id  \
 # --metadata  \
 ##################################################################################
-#####     Deploying Root Stack          #####
+#####     Deploying Root Stack              #####
 ##################################################################################
 #   Deploying RDS Stack
 aws cloudformation deploy \
@@ -69,8 +82,7 @@ aws cloudformation deploy \
 # --kms-key-id  \
 
 ##################################################################################
-#   You package all the nested stacks and then refer to the output template (packaged.yaml)
-#   The package.yaml file will contain the S3 bucket location of the code
-#   For lambda functions that are in the nested function make sure they have their own seperate
-#   folder
+#   You package all the nested stacks and then refer to the output template (packaged.yaml) in the root stacks template.
+#   The package.yaml file will contain the S3 bucket location of the code.
+#   For lambda functions that are in the nested function make sure they have their own seperate folder.
 

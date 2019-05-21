@@ -1,0 +1,20 @@
+{
+  "name": "elastic-search",
+  "version": "1.0.0",
+  "description": "Elasticsearch related packages for an AWS Lambda Layer by Voltic Labs Inc.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "Lambda",
+    "Layers",
+    "Elasticsearch"
+  ],
+  "author": "Aklas Cheema",
+  "license": "SEE LICENSE IN index.js",
+  "dependencies": {
+    "elasticsearch": "^16.0.0",
+    "http-aws-es": "^6.0.0"
+  }
+}

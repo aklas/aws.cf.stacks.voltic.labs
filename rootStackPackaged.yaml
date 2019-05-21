@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Voltic Labs sample root stack.
+
+  '
+Resources:
+  RDSStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Tags:
+      - Key: RDSStackKey
+        Value: RDSStackValue
+      TemplateURL: https://s3.amazonaws.com/aws-sam-stacks/0c1a21c877b28085bb72c818bb7ea3d8.template
+      TimeoutInMinutes: 30
+  Cognito:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Tags:
+      - Key: CognitoStackKey
+        Value: CognitoStackValue
+      TemplateURL: https://s3.amazonaws.com/aws-sam-stacks/8a39914bc9210b0fd9e58bfed95dbbb6.template
+      TimeoutInMinutes: 15

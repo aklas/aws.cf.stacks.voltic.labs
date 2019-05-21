@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Cloudformation stack to manage all organization wide Lambda Layers used to in AWS Lambda.
+
+Parameters:
+  ReleaseEnvironment:
+    Type: String
+    Default: dev
+    Description: The software development environment (ie dev, testing, production, etc...)
+
+Resources:
+  aLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: aLayer
+      Description: Description of the lambda layer
+      ContentUri: nodejs10.x/elastic-search/
+      CompatibleRuntimes:
+        - nodejs6.10
+        - nodejs8.10
+        - nodejs10.x
+      LicenseInfo: UNLICENSED
+      RetentionPolicy: Delete                                 # 1A
+
+#########################################################################################################################################################
+#####     CUSTOM RESOURCES    #####
+###################################
+
+
+#########################################################################################################################################################
+Outputs:
+  SampleLambdaFunction:
+    Description: A description of an output in this template for a lambda layer
+    Value: !Ref aLayer
+
+##################################################################################
+#####     NOTES    #####
+########################
+# 1    (aLayer, AWS::Serverless::LayerVersion)
+# 1A ) Options are Retain and Delete.
+# Retain: If you set this on creation of the layer it will retain previous versions of the layer.
+# Delete: If you set this on creation of the layer it will delete previous versions once the new version is deployed.
+# NOTE: If you change this setting after have created the layer it will have no impact.
+# So for example if you set it to Retain and then changed it to Delete it will NOT delete the previous version.
+# So changing this field after the first deployment of this instance will no effect.
+# 1B ) License information for the lambda layer.
+# https://github.com/npm/npm/issues/10621, complys with the SPDX license expression.
+##################################################################################

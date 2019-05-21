@@ -22,20 +22,33 @@ Resources:
   #     # TemplateURL: https://s3.amazonaws.com/aws-sam-stacks/1ed7663fd16c64951de708a23dac78d7
   #     TimeoutInMinutes: 15
 
-  RDSStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      # NotificationARNs:
-      #   - String
-      # Parameters:
-      #   AWS CloudFormation Stack Parameters
-      Tags:
-        - Key: RDSStackKey
-          Value: RDSStackValue
-      TemplateURL: "./RDS-Aurora-Serverless/packaged.yaml"
-      TimeoutInMinutes: 30
+  # RDSStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     # NotificationARNs:
+  #     #   - String
+  #     # Parameters:
+  #     #   AWS CloudFormation Stack Parameters
+  #     Tags:
+  #       - Key: RDSStackKey
+  #         Value: RDSStackValue
+  #     TemplateURL: "./RDS-Aurora-Serverless/packaged.yaml"
+  #     TimeoutInMinutes: 30
 
-  Cognito:
+  # Cognito:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     # NotificationARNs:
+  #     #   - String
+  #     # Parameters:
+  #     #   AWS CloudFormation Stack Parameters
+  #     Tags:
+  #       - Key: CognitoStackKey
+  #         Value: CognitoStackValue
+  #     TemplateURL: "./Auth/packaged.yaml"
+  #     TimeoutInMinutes: 15
+
+    LambdaLayers:
     Type: AWS::CloudFormation::Stack
     Properties:
       # NotificationARNs:

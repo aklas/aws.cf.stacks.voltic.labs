@@ -1,26 +1,124 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Transform: AWS::Serverless-2016-10-31
+
 # https://aws.amazon.com/blogs/database/tag/amazon-elasticsearch-service-get-started/
 
 Description: >
   Elasticsearch stack by Voltic Labs Inc.
 
+Parameters:
+  DynamoDBStream:
+    Type: String
+    Default: arn:aws:dynamodb:us-east-1:027648606659:table/testTable/stream/2019-05-21T19:48:33.907
+    Description: Arn of the DynamoDB Stream
+  DomainName:
+    Type: String
+    Default: volticlabselasticsearch
+    Description: A name for the Amazon ES domain.
+  ReleaseEnvironment: 
+    Type: String
+    Default: dev
+    Description: The software development environment (ie dev, testing, production, etc...)
+
 Resources:
-  ESLambda:
-    Type: AWS::Serverless::Function
+#########################################################################################################################################################
+#####     Elastic Search Domain    #####
+########################################
+  Elasticsearch:
+    Type: AWS::Elasticsearch::Domain
     Properties:
-      FunctionName: ESLambda
-      CodeUri: Lambdas/elasticsearch/
+      DomainName: !Ref DomainName
+      ElasticsearchClusterConfig:
+        InstanceType: t2.small.elasticsearch              # See 2A
+        InstanceCount: 2                                  # See 2F
+        DedicatedMasterEnabled: true                      # See 2B
+        DedicatedMasterType: t2.small.elasticsearch       # See 2C
+        DedicatedMasterCount: 2                           # See 2D
+        ZoneAwarenessEnabled: true                        # See 2E
+      # AdvancedOptions:                                  # See 3A
+      #   Key: Value 
+      ElasticsearchVersion: 6.5                           # See 1A
+      EBSOptions:
+        EBSEnabled: true                                  # See 7A
+        # Iops: Integer                                   # See 7B
+        VolumeSize: 10                                    # See 7C
+        VolumeType: gp2                                   # See 7D
+      EncryptionAtRestOptions : 
+          Enabled : false                                 # See 6A
+          # KmsKeyId : String                             # See 6B
+      NodeToNodeEncryptionOptions: 
+        Enabled: true                                     # See 5A
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: 7                     # See 4A
+      Tags : 
+        - Key: ElasticsearchTagKey
+          Value: ElasticsearchTagValue
+      # VPCOptions : 
+      #   VPCOptions
+      AccessPolicies: 
+        Version: '2012-10-17'
+        Statement:
+          # IP Address
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action: es:*
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
+            Condition:
+              IpAddress:
+                aws:SourceIp: 70.72.200.121
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt DynamoDBSIndexUpdaterRole.Arn
+            Action: es:*
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*'
+            # # AppSync
+            # - Effect: Allow
+            #   Principal:
+            #     AWS: arn:aws:iam::810093522723:role/service-role/appsync-ds-es-5pwarr-search-servindomain-
+            #   Action:
+            #   - es:ESHttpDelete
+            #   - es:ESHttpHead
+            #   - es:ESHttpGet
+            #   - es:ESHttpPost
+            #   - es:ESHttpPut
+            #   Resource: arn:aws:es:us-east-1:810093522723:domain/servindomain/*
+            # Lambda function
+  # ---------------------------------------------------------------------------
+#########################################################################################################################################################
+#####     DynamoDB  Integration    #####
+########################################
+  DynamoDBSIndexUpdater:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: DynamoDBSIndexUpdater
+      Runtime: nodejs10.x
+      Code: ./Lambdas/elasticsearch/
       Handler: index.handler
-      Runtime: nodejs8.10
-      MemorySize: 128
-      Timeout: 10
-      Role: !GetAtt LambdaForCloudFormationRole.Arn
-  
-  LambdaForCloudFormationRole:
+      Role: !GetAtt DynamoDBSIndexUpdaterRole.Arn
+      Description: >
+        Lambda function that is executed in response to DynamoDB Stream events.
+        The lambda function inserts/updates/removes the entry from elastic search index.
+
+  DynamoDBSIndexUpdaterEventSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      Enabled: true
+      EventSourceArn: !Ref DynamoDBStream
+      FunctionName:
+        Ref: DynamoDBSIndexUpdater
+      StartingPosition: TRIM_HORIZON
+
+  DynamoDBSIndexUpdaterRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: LambdaForCloudFormationRole
+      RoleName: DynamoDBSIndexUpdaterRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AWSLambdaFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaDynamoDBExecutionRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -42,40 +140,9 @@ Resources:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: 'arn:aws:logs:*:*:*'
-
-  # ---------------------------------------------------------------------------
-  # Elasticsearch:
-  #   Type: AWS::Elasticsearch::Domain
-  #   Properties:
-  #     DomainName: VolticLabsElasticSearch
-  #     # AccessPolicies: Json
-  #     ElasticsearchClusterConfig:
-  #       InstanceType: t2.small.elasticsearch              # See 2A
-  #       InstanceCount: 2                                  # See 2F
-  #       DedicatedMasterEnabled: true                      # See 2B
-  #       DedicatedMasterType: t2.small.elasticsearch       # See 2C
-  #       DedicatedMasterCount: 2                           # See 2D
-  #       ZoneAwarenessEnabled: true                        # See 2E
-  #     # AdvancedOptions:                                  # See 3A
-  #     #   Key: Value 
-  #     ElasticsearchVersion: 6.5                           # See 1A
-  #     EBSOptions:
-  #       EBSEnabled: true                                  # See 7A
-  #       # Iops: Integer                                   # See 7B
-  #       VolumeSize: 10                                    # See 7C
-  #       VolumeType: gp2                                   # See 7D
-  #     EncryptionAtRestOptions : 
-  #         Enabled : false                                 # See 6A
-  #         # KmsKeyId : String                             # See 6B
-  #     NodeToNodeEncryptionOptions: 
-  #       Enabled: true                                     # See 5A
-  #     SnapshotOptions:
-  #       AutomatedSnapshotStartHour: 7                     # See 4A
-  #     Tags : 
-  #       - Key: ElasticsearchTagKey
-  #         Value: ElasticsearchTagValue
-  #     # VPCOptions : 
-  #     #   VPCOptions
+#########################################################################################################################################################
+#####     RDS Aurora Serverless Integration    #####
+####################################################
 
 #########################################################################################################################################################
 #####     NOTES    #####
