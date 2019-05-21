@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+# https://aws.amazon.com/blogs/database/tag/amazon-elasticsearch-service-get-started/
+
+Description: >
+  Elasticsearch stack by Voltic Labs Inc.
+
+Resources:
+  ESLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ESLambda
+      CodeUri: Lambdas/elasticsearch/
+      Handler: index.handler
+      Runtime: nodejs8.10
+      MemorySize: 128
+      Timeout: 10
+      Role: !GetAtt LambdaForCloudFormationRole.Arn
+  
+  LambdaForCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaForCloudFormationRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: Allow
+            Action: 'sts:AssumeRole'
+            Principal:
+              Service: lambda.amazonaws.com
+      Policies:
+        -
+          PolicyName: WriteCloudWatchLogs
+          PolicyDocument: 
+            Version: '2012-10-17'
+            Statement: 
+              -
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+
+  # ---------------------------------------------------------------------------
+  # Elasticsearch:
+  #   Type: AWS::Elasticsearch::Domain
+  #   Properties:
+  #     DomainName: VolticLabsElasticSearch
+  #     # AccessPolicies: Json
+  #     ElasticsearchClusterConfig:
+  #       InstanceType: t2.small.elasticsearch              # See 2A
+  #       InstanceCount: 2                                  # See 2F
+  #       DedicatedMasterEnabled: true                      # See 2B
+  #       DedicatedMasterType: t2.small.elasticsearch       # See 2C
+  #       DedicatedMasterCount: 2                           # See 2D
+  #       ZoneAwarenessEnabled: true                        # See 2E
+  #     # AdvancedOptions:                                  # See 3A
+  #     #   Key: Value 
+  #     ElasticsearchVersion: 6.5                           # See 1A
+  #     EBSOptions:
+  #       EBSEnabled: true                                  # See 7A
+  #       # Iops: Integer                                   # See 7B
+  #       VolumeSize: 10                                    # See 7C
+  #       VolumeType: gp2                                   # See 7D
+  #     EncryptionAtRestOptions : 
+  #         Enabled : false                                 # See 6A
+  #         # KmsKeyId : String                             # See 6B
+  #     NodeToNodeEncryptionOptions: 
+  #       Enabled: true                                     # See 5A
+  #     SnapshotOptions:
+  #       AutomatedSnapshotStartHour: 7                     # See 4A
+  #     Tags : 
+  #       - Key: ElasticsearchTagKey
+  #         Value: ElasticsearchTagValue
+  #     # VPCOptions : 
+  #     #   VPCOptions
+
+#########################################################################################################################################################
+#####     NOTES    #####
+########################
+# 1    (ElasticsearchVersion)
+# 1A ) The ElasticsearchVersion to use. The default is 1.5. The current avaliable versions include:
+# 6.5, 6.4, 6.3, 6.2, 6.0, 5.6, 5.5, 5.3, 5.1, 2.3, and 1.5
+# For an updated list visit the following:
+# https://aws.amazon.com/elasticsearch-service/faqs/
+##################################################################################
+# 2    (ElasticsearchClusterConfig)
+# 2A ) InstanceType: The instance type for your data nodes. See the following link for instance types and associated pricing:
+# https://aws.amazon.com/elasticsearch-service/pricing/
+# 2B ) DedicatedMasterEnabled: Indicates whether to use a dedicated master node for the Amazon ES domain.
+# A dedicated master node is a cluster node that performs cluster management tasks, but doesn't hold data or respond to data upload requests.
+# Dedicated master nodes offload cluster management tasks to increase the stability of your search clusters.
+# 2C ) DedicatedMasterType: The instance type of the master nodes in your cluster, such as m3.medium.elasticsearch.
+# If you specify this property, you must specify true for the DedicatedMasterEnabled property. See the following link for instance types:
+# https://aws.amazon.com/elasticsearch-service/pricing/
+# 2D ) DedicatedMasterCount: The number of instances to use for the master node.
+# If you specify this property, you must specify true for the DedicatedMasterEnabled property.
+# 2E ) ZoneAwarenessEnabled: When enabled AWS allocates some of the nodes (replicas index shards) across two avalibility zone (AZs) in the same region.
+# This ensures if one of the AZs goes offline there is a still instances in another AZ which can continue to function. 
+# 2F ) InstanceCount: The number of instances (data nodes) you want in your cluster.
+##################################################################################
+# 3    (AdvancedOptions)
+# 3A ) Advance option including the following:
+# rest.action.multi.allow_explicit_index
+# indices.fielddata.cache.size
+# indices.query.bool.max_clause_count
+# For more information on there option visit the following website:
+# https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-createupdatedomains.html#es-createdomain-configure-advanced-options
+##################################################################################
+# 4    (SnapshotOptions)
+# 4A ) AutomatedSnapshotStartHour: The hour in UTC during which the service takes an automated daily snapshot of the indices in the Amazon ES domain.
+# For example, if you specify 0, Amazon ES takes an automated snapshot everyday between midnight and 1 am. You can specify a value between 0 and 23.
+# Since this time is in UTC you should use the following website to find an optimal UTC time from you local time zone.
+# https://www.worldtimebuddy.com/utc-to-mst-converter
+##################################################################################
+# 5    (NodeToNodeEncryptionOptions)
+# 5A ) Enabled: Allows you to enable the NodeToNode TLS encyrption in you Elasticsearch cluster.
+# So that as each instance (master and data nodes) communicate among each other all the traffic is encrypted so no man in the middle attach is possible.
+##################################################################################
+# 6    (EncryptionAtRestOptions)
+# 6A ) Enabled: Encryption at rest secures the indices and automated snapshots associated with the domain. 
+# The encryption key is handled by AWS Key Management Service (KMS).
+# 6B ) KmsKeyId: The KMS key ID. Takes the form 1a2a3a4-1a2a-3a4a-5a6a-1a2a3a4a5a6a. You can use the Ref tag of a AWS::KMS::Key to get the key.
+##################################################################################
+# 7    (EBSOptions)
+# 7A ) EBSEnabled: Specifies whether Amazon EBS volumes are attached to data nodes in the Amazon ES domain.
+# 7B ) Iops: The number of I/O operations per second (IOPS) that the volume supports. This property applies only to the Provisioned IOPS (SSD) EBS volume type.
+# 7C ) VolumeSize: The size (in GiB) of the EBS volume for each data node.
+# The minimum and maximum size of an EBS volume depends on the EBS volume type and the instance type to which it is attached. For more information visit the following:
+# https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-createupdatedomains.html#es-createdomain-configure-ebs
+# 7D ) VolumeType: The EBS volume type to use with the Amazon ES domain, such as standard, gp2, io1, st1, or sc1.
+# For more information visit the following:
+# https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSVolumeTypes.html
+##################################################################################
