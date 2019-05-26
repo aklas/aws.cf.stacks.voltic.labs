@@ -11,6 +11,7 @@ outputTemplateFile="rootStackPackaged.yaml"
 useJSON=$false
 forceUpload=$true
 stackName="TEST"
+rm -r $outputTemplateFile
 ##################################################################################
 #####     Root Stack Pre-Porcessing         #####
 ##################################################################################
@@ -23,6 +24,19 @@ aws cloudformation package \
 --template-file "./Lambda-Layers/template.yaml" \
 --s3-bucket $bucketName \
 --output-template-file "./Lambda-Layers/packaged.yaml" \
+    # --use-json $useJSON \
+    # --force-upload $forceUpload \
+    # --debug
+    # --s3-prefix "$S3Prefix/package" \
+    # --kms-key-id  \
+    # --metadata  \
+##################################################################################
+#####     Packaging Nested Elasticsearch Stack                #####
+##################################################################################
+aws cloudformation package \
+--template-file "./Elasticsearch/template.yaml" \
+--s3-bucket $bucketName \
+--output-template-file "./Elasticsearch/packaged.yaml" \
     # --use-json $useJSON \
     # --force-upload $forceUpload \
     # --debug
@@ -71,18 +85,17 @@ aws cloudformation package \
 ##################################################################################
 #####     Deploying Root Stack              #####
 ##################################################################################
-#   Deploying RDS Stack
 aws cloudformation deploy \
 --template-file $outputTemplateFile \
 --stack-name $stackName \
 --s3-bucket $bucketName \
 --force-upload $true \
---capabilities CAPABILITY_NAMED_IAM
+--capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND
 # --s3-prefix "$S3Prefix/deploy" \
 # --kms-key-id  \
 
 ##################################################################################
 #   You package all the nested stacks and then refer to the output template (packaged.yaml) in the root stacks template.
-#   The package.yaml file will contain the S3 bucket location of the code.
+#   The package.yaml file will contain the S3 bucket location of the nested stacks code.
 #   For lambda functions that are in the nested function make sure they have their own seperate folder.
 

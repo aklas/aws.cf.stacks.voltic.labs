@@ -1,4 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
 Description: >
   Voltic Labs sample root stack.
 
@@ -48,18 +50,31 @@ Resources:
   #     TemplateURL: "./Auth/packaged.yaml"
   #     TimeoutInMinutes: 15
 
-    LambdaLayers:
+  ElasticSearch:
     Type: AWS::CloudFormation::Stack
     Properties:
       # NotificationARNs:
       #   - String
-      # Parameters:
-      #   AWS CloudFormation Stack Parameters
+      Parameters:
+        ElasticsearchLayer: !GetAtt LambdaLayers.Outputs.ElasticsearchLambdaLayer
       Tags:
-        - Key: CognitoStackKey
-          Value: CognitoStackValue
-      TemplateURL: "./Auth/packaged.yaml"
+        - Key: ElasticSearchStackKey
+          Value: ElasticSearchStackValue
+      TemplateURL: "./Elasticsearch/packaged.yaml"
       TimeoutInMinutes: 15
+
+  LambdaLayers:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: "./Lambda-Layers/packaged.yaml"
+      # Parameters:
+      #   StringParameter: parameter-value
+      #   IntegerParameter: 2
+      # Tags:
+      #   - Key: LambdaLayersStackKey
+      #     Value: LambdaLayersStackValue
+      TimeoutInMinutes: 15
+
 #########################################################################################################################################################
 #####     SHARED RESOURCES    #####
 ###################################

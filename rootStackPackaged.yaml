@@ -1,21 +1,24 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 Description: 'Voltic Labs sample root stack.
 
   '
 Resources:
-  RDSStack:
+  ElasticSearch:
     Type: AWS::CloudFormation::Stack
     Properties:
+      Parameters:
+        ElasticsearchLayer:
+          Fn::GetAtt:
+          - LambdaLayers
+          - Outputs.ElasticsearchLambdaLayer
       Tags:
-      - Key: RDSStackKey
-        Value: RDSStackValue
-      TemplateURL: https://s3.amazonaws.com/aws-sam-stacks/0c1a21c877b28085bb72c818bb7ea3d8.template
-      TimeoutInMinutes: 30
-  Cognito:
-    Type: AWS::CloudFormation::Stack
+      - Key: ElasticSearchStackKey
+        Value: ElasticSearchStackValue
+      TemplateURL: https://s3.amazonaws.com/aws-sam-stacks/0ddaa09f8f3a50665418a7b199acb27f.template
+      TimeoutInMinutes: 15
+  LambdaLayers:
+    Type: AWS::Serverless::Application
     Properties:
-      Tags:
-      - Key: CognitoStackKey
-        Value: CognitoStackValue
-      TemplateURL: https://s3.amazonaws.com/aws-sam-stacks/8a39914bc9210b0fd9e58bfed95dbbb6.template
+      Location: https://s3.amazonaws.com/aws-sam-stacks/86f9aa8ec6782936dde77db3380b49e0.template
       TimeoutInMinutes: 15

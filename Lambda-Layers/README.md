@@ -12,6 +12,7 @@ Javascript
         - dotenv
     * Image handling
     * Elasticsearch (ES Offical JS Lib)
+    * Libraries for Custom Resources
 
 Java
     * Geo-Lib
